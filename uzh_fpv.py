@@ -44,8 +44,10 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
             with tempfile.TemporaryDirectory() as tmp_dir:
                 tmp_dir = Path(tmp_dir)
                 download_and_extract_archive(f"{base_url_calib}{name}_calib_davis.zip", tmp_dir)
-                (tmp_dir / f"{name}_calib_davis" / f"camchain-..{name}_calib_davis_cam.yaml").rename(dest / "calib.yaml")
-                
+                (tmp_dir / f"{name}_calib_davis" / f"camchain-..{name}_calib_davis_cam.yaml").rename(
+                    dest / "calib.yaml"
+                )
+
         # recording
         if not (dest / f"{rec}.h5").exists():
             with tempfile.TemporaryDirectory() as tmp_dir:
@@ -60,11 +62,26 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                 # first get raw data so we can work with it efficiently
                 # then make frames with channels: neg count, pos count, avg quantized ts
                 with h5py.File(dest / f"{rec}.h5", "w") as h5f:
-                    h5f.create_dataset("events/frames", (0, 3, *sensor_size), maxshape=(None, 3, *sensor_size), chunks=True, dtype=np.float32, **hdf5plugin.Zstd())
-                    h5f.create_dataset("events/t", (0,), maxshape=(None,), chunks=True, dtype=np.float64, **hdf5plugin.Zstd())
-                    h5f.create_dataset("events/y", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, **hdf5plugin.Zstd())
-                    h5f.create_dataset("events/x", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, **hdf5plugin.Zstd())
-                    h5f.create_dataset("events/p", (0,), maxshape=(None,), chunks=True, dtype=np.bool_, **hdf5plugin.Zstd())
+                    h5f.create_dataset(
+                        "events/frames",
+                        (0, 3, *sensor_size),
+                        maxshape=(None, 3, *sensor_size),
+                        chunks=True,
+                        dtype=np.float32,
+                        **hdf5plugin.Zstd(),
+                    )
+                    h5f.create_dataset(
+                        "events/t", (0,), maxshape=(None,), chunks=True, dtype=np.float64, **hdf5plugin.Zstd()
+                    )
+                    h5f.create_dataset(
+                        "events/y", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, **hdf5plugin.Zstd()
+                    )
+                    h5f.create_dataset(
+                        "events/x", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, **hdf5plugin.Zstd()
+                    )
+                    h5f.create_dataset(
+                        "events/p", (0,), maxshape=(None,), chunks=True, dtype=np.bool_, **hdf5plugin.Zstd()
+                    )
 
                     events = pd.read_csv(
                         tmp_dir / "events.txt",
@@ -80,7 +97,7 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                         append(h5f["events/y"], df["y"].values)
                         append(h5f["events/x"], df["x"].values)
                         append(h5f["events/p"], df["p"].values)
-                    
+
                     # proces into frames
                     if time_window is not None:
                         t0, tk = h5f["events/t"][0], h5f["events/t"][-1]
@@ -91,7 +108,7 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                     elif count_window is not None:
                         start = bisect_left(h5f["events/t"], h5f["events/t"][0] + t0_skip)
                         splits = np.arange(start, len(h5f["events/t"]), count_window)
-                    
+
                     # precompute backwards rectification
                     if rectify:
                         # kalibr equidistant = .fisheye
@@ -102,7 +119,9 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                         K_rect = K_dist.copy()  # usually same for fisheye
                         dist_coeffs = np.array(cam_to_cam["cam0"]["distortion_coeffs"])
                         resolution = cam_to_cam["cam0"]["resolution"]  # xy
-                        rect_map_x, rect_map_y = cv2.fisheye.initUndistortRectifyMap(K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32F)
+                        rect_map_x, rect_map_y = cv2.fisheye.initUndistortRectifyMap(
+                            K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32F
+                        )
                         bw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)
 
                     chunk_size = 100
@@ -136,7 +155,7 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                             if rectify:
                                 frame = cv2.remap(frame.transpose(1, 2, 0), bw_rect_map, None, cv2.INTER_NEAREST)
                                 frame = frame.transpose(2, 0, 1)
-                            
+
                             frames.append(frame)
 
                         # add to h5
@@ -145,9 +164,12 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
 
 
 if __name__ == "__main__":
-    get_uzh_fpv_h5_frames("data/uzh_fpv_10ms_0.25ts_rect", time_window=0.01, count_window=None, ts_res=0.25, rectify=True)
+    get_uzh_fpv_h5_frames(
+        "data/uzh_fpv_10ms_0.25ts_rect", time_window=0.01, count_window=None, ts_res=0.25, rectify=True
+    )
 
     import rerun as rr
+
     rr.init("uzh_fpv_test")
     rr.serve()
 
