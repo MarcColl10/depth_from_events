@@ -13,6 +13,17 @@ import yaml
 
 
 def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
+    """
+    Convert UZH-FPV dataset to h5 files containing raw events and event frames.
+
+    Args:
+        root_dir (str): Root directory to save the dataset.
+        time_window (float): Time window in seconds to split the dataset into frames.
+        count_window (int): Number of events to split the dataset into frames.
+        ts_res (float): Timestamp resolution to quantize the average timestamp channel.
+        rectify (bool): Whether to rectify the frames using the calibration data.
+    """
+
     # now only indoor forward, but there's also 45deg and outdoor
     # time in seconds to skip at the beginning to approx. start at takeoff
     root_dir = Path(root_dir)
@@ -167,13 +178,3 @@ if __name__ == "__main__":
     get_uzh_fpv_h5_frames(
         "data/uzh_fpv_10ms_0.25ts_rect", time_window=0.01, count_window=None, ts_res=0.25, rectify=True
     )
-
-    import rerun as rr
-
-    rr.init("uzh_fpv_test")
-    rr.serve()
-
-    with h5py.File("data/uzh_fpv_10ms_0.25ts_rect/indoor_forward/indoor_forward_12_davis.h5", "r") as f:
-        frames = f["events/frames"]
-        for frame in frames:
-            rr.log("frame", rr.Tensor(frame, dim_names=["C", "H", "W"]))
