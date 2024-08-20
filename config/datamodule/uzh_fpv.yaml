@@ -1,0 +1,8 @@
+_target_: datamodule.DataModule
+root_dir: data/uzh_fpv_10ms_0.25ts_rect  # created with uzh_fpv.py
+train_seq_len: 100
+train_crop: [128, 128]  # hw for random, tlbr or null for fixed
+augmentations: [flip_t, flip_pol, flip_ud, flip_lr]
+batch_size: 8
+shuffle: true
+num_workers: 8
