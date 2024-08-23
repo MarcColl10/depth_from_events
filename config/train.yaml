@@ -1,7 +1,7 @@
 defaults:
   - datamodule: uzh_fpv
   - litmodule: train
-  - network: global_flow
+  - network: flow
   - loss_functions:
     - cmax_iter
   - optimizer: adamw

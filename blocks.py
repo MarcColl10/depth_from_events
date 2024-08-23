@@ -99,3 +99,20 @@ def global_pool_decoder(out_features):
         nn.Flatten(),
         nn.LazyLinear(out_features),
     )
+
+
+def upsample_decoder(out_channels):
+    decoder = nn.Sequential(
+        nn.Sequential(
+            nn.LazyConv2d(out_channels, 3, padding=1),
+            nn.ReLU(),
+        ),
+        nn.Sequential(
+            nn.LazyConv2d(2, 3, padding=1),  # TODO: no bias?
+            nn.Identity(),
+        ),
+        nn.Sequential(
+            nn.Upsample(scale_factor=8, mode="bilinear", align_corners=False),
+        ),
+    )
+    return decoder

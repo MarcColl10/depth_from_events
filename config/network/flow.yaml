@@ -1,0 +1,5 @@
+_target_: network.WrappedFlowNetwork
+encoder_channels: 64
+memory_channels: 96
+decoder_channels: 96
+scaling: 32
