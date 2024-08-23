@@ -18,6 +18,11 @@ class Train(LightningModule):
             x = torch.zeros(self.trainer.datamodule.train_frame_shape, device=self.device)
             self.network.trace(x)
 
+        # wandb model watching
+        # TODO: quite heavy, maybe less/disable?
+        if self.logger is not None:
+            self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
+
         # set visualization
         self.visualizing = "visualizer" in self.trainer.callbacks
 
@@ -45,10 +50,11 @@ class Train(LightningModule):
                     loss = loss_fn.backward()
 
                     # training: backprop and optimize
-                    # TODO: scheduler, gradient clipping
+                    # TODO: scheduler
                     if stage == "train":
                         optimizer.zero_grad()
                         self.manual_backward(loss)
+                        self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
                         optimizer.step()
 
                         # detach network state
@@ -57,6 +63,7 @@ class Train(LightningModule):
                     # reset loss and log
                     # loss per tbptt window per batch sample
                     # default batch size (seq_len) gives same value but rounding errors
+                    # TODO: add recording name
                     for name, value in loss_fn.compute_and_reset().items():
                         self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
 
@@ -81,5 +88,6 @@ class Train(LightningModule):
         return self.shared_step(batch, batch_idx, "val")
 
     def configure_optimizers(self):
+        self.gradient_clip_val = self.optimizer.keywords.pop("gradient_clip_val", 0.0)
         optimizer = self.optimizer(self.network.parameters())
         return optimizer
