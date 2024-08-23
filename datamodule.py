@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import ConcatDataset, DataLoader
 
-from data_utils import batched, ConcatBatchSampler, time_first_collate
+from data_utils import batched, ConcatBatchSampler, only_add_batch_dim, time_first_collate
 
 
 @dataclass
@@ -105,7 +105,7 @@ class FrameSequence:
         sample = DotMap()
         sample.frames = frames
         sample.recording = None
-        sample.eof = [i == len(self.slice) - 1 for i in chunk]
+        sample.eofs = [i == len(self.slice) - 1 for i in chunk]
         sample.K_rect = K_rect
         sample.inv_K_rect = inv_K_rect
 
@@ -134,7 +134,7 @@ class DataModule(LightningDataModule):
         self.num_workers = num_workers
 
     def prepare_data(self):
-        self.recordings = [
+        self.train_recordings = [
             "indoor_forward_3_davis_with_gt",
             "indoor_forward_5_davis_with_gt",
             "indoor_forward_6_davis_with_gt",
@@ -145,27 +145,61 @@ class DataModule(LightningDataModule):
             "indoor_forward_11_davis",
             "indoor_forward_12_davis",
         ]
+        self.val_recordings = [
+            "indoor_forward_10_davis_with_gt",
+        ]
+
+    @staticmethod
+    def get_frame_shape(crop):
+        if len(crop) == 2:
+            return crop
+        else:
+            return (crop[2] - crop[0], crop[3] - crop[1])
 
     def setup(self, stage):
-        sequence = partial(
-            FrameSequence,
-            seq_len=self.train_seq_len,
-            crop=self.train_crop,
-            augmentations=self.augmentations,
-        )
         if stage == "fit":
-            train_recordings = []
-            for rec in self.recordings:
+            self.train_frame_shape = (self.batch_size, 3, *self.get_frame_shape(self.train_crop))
+            sequence = partial(
+                FrameSequence,
+                seq_len=self.train_seq_len,
+                crop=self.train_crop,
+                augmentations=self.augmentations,
+            )
+            recordings = []
+            for rec in self.train_recordings:
                 name = ("_").join(rec.split("_")[:2])
                 fname = self.root_dir / name / f"{rec}.h5"
                 seq = sequence(file=fname)
-                train_recordings.extend([fname] * int(seq.n_frames / seq.seq_len))
-            self.train_dataset = ConcatDataset([sequence(file=fname) for fname in train_recordings])
+                recordings.extend([fname] * int(seq.n_frames / seq.seq_len))
+            self.train_dataset = ConcatDataset([sequence(file=fname) for fname in recordings])
+
+        if stage in ["fit", "validate"]:
+            self.val_frame_shape = (1, 3, 256, 344)
+            sequence = partial(
+                FrameSequence,
+                crop=(2, 1, 258, 345),  # to allow 8x downsampling TODO: or with padder in network?
+            )
+            recordings = []
+            for rec in self.val_recordings:
+                name = ("_").join(rec.split("_")[:2])
+                fname = self.root_dir / name / f"{rec}.h5"
+                recordings.append(fname)
+            self.val_dataset = ConcatDataset([sequence(file=fname) for fname in recordings])
 
     def train_dataloader(self):
         sampler = ConcatBatchSampler(self.train_dataset, self.batch_size, shuffle=self.shuffle)
         dataloader = DataLoader(
             self.train_dataset, batch_sampler=sampler, num_workers=self.num_workers, collate_fn=time_first_collate
+        )
+        return dataloader
+
+    def val_dataloader(self):
+        dataloader = DataLoader(
+            self.val_dataset,
+            batch_size=None,
+            shuffle=False,
+            num_workers=self.num_workers,
+            collate_fn=only_add_batch_dim,
         )
         return dataloader
 

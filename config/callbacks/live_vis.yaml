@@ -1,0 +1,3 @@
+visualizer:
+  _target_: callbacks.LiveVisualizer
+  name: ${...name}

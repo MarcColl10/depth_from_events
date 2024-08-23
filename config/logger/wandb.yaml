@@ -1,0 +1,6 @@
+_target_: lightning.pytorch.loggers.WandbLogger
+entity: huizerd
+project: depth_from_events
+save_dir: logs
+log_model: all
+notes: null

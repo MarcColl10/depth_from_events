@@ -1,0 +1,4 @@
+_target_: network.WrappedGlobalFlowNetwork
+encoder_channels: 32
+memory_channels: 32
+scaling: 1.0

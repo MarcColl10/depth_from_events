@@ -1,0 +1,16 @@
+defaults:
+  - datamodule: uzh_fpv
+  - litmodule: train
+  - network: global_flow
+  - loss_functions:
+    - cmax_iter
+  - optimizer: adamw
+  - trainer: train
+  - callbacks:
+    - progress
+    - checkpoint
+  - logger: nothing
+  - hydra: no_logging
+  - _self_  # to disable warning
+
+name: train

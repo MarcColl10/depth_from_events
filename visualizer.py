@@ -73,7 +73,7 @@ def flow_frame_to_image(frame):
     return frame_rgb
 
 
-class LiveVisualizer:
+class RerunVisualizer:
     """
     Live visualizer using Rerun.
 
