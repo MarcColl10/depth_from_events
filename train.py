@@ -41,6 +41,8 @@ def main(config):
     )
     trainer.fit(litmodule, datamodule=datamodule)
 
+    # TODO: immediately validate/test/create videos
+
 
 if __name__ == "__main__":
     main()

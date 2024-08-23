@@ -1,0 +1,11 @@
+defaults:
+  - hydra: no_logging
+  - _self_
+
+wandb:
+  entity: huizerd
+  project: depth_from_events
+
+name: ${runid}_${checkpoint}
+runid: ???
+checkpoint: ???
