@@ -60,6 +60,8 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
 
                 def append(dataset, data):
                     n = len(data)
+                    if n == 0:
+                        return
                     dataset.resize(len(dataset) + n, axis=0)
                     dataset[-n:] = data
 
@@ -86,6 +88,15 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                     h5f.create_dataset(
                         "events/p", (0,), maxshape=(None,), chunks=True, dtype=np.bool_, **hdf5plugin.Zstd()
                     )
+
+                    # if rectifying, also store rectified coordinates
+                    if rectify:
+                        h5f.create_dataset(
+                            "events/y_rect", (0,), maxshape=(None,), chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                        )
+                        h5f.create_dataset(
+                            "events/x_rect", (0,), maxshape=(None,), chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                        )
 
                     events = pd.read_csv(
                         tmp_dir / "events.txt",
@@ -156,6 +167,19 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                     h5f.attrs["rectify"] = rectify
                     h5f.attrs["K_rect"] = K_rect
 
+                    # convert all to rectified coordinates
+                    if rectify:
+                        chunk_size = 100000
+                        n = len(h5f["events/t"])
+                        chunks = [(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)]
+                        for start, stop in track(chunks, description=f"Rectifying {rec}..."):
+                            y = h5f["events/y"][start:stop]
+                            x = h5f["events/x"][start:stop]
+                            x_rect, y_rect = fw_rect_map[y, x].T
+                            append(h5f["events/x_rect"], x_rect)
+                            append(h5f["events/y_rect"], y_rect)
+
+                    # convert relevant part to frames
                     chunk_size = 100
                     chunks = np.array_split(np.stack([splits[:-1], splits[1:]]), len(splits) // chunk_size, axis=1)
                     for chunk in track(chunks, description=f"Converting {rec} to frames..."):
@@ -193,6 +217,13 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                         # add to h5
                         frames = np.stack(frames)
                         append(h5f["events/frames"], frames)
+
+                    # overwrite raw coords with rectified
+                    if rectify:
+                        del h5f["events/y"], h5f["events/x"]
+                        h5f["events/y"] = h5f["events/y_rect"]
+                        h5f["events/x"] = h5f["events/x_rect"]
+                        del h5f["events/y_rect"], h5f["events/x_rect"]
 
 
 if __name__ == "__main__":
