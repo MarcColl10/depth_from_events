@@ -187,7 +187,7 @@ class DataModule(LightningDataModule):
                 crop=self.val_crop,
             )
             self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.val_recordings])
-            self.val_frame_shape = (1, 3, *sequence(recording=recordings[0]).frame_shape)
+            self.val_frame_shape = (1, 3, *sequence(recording=self.val_recordings[0]).frame_shape)
 
     def train_dataloader(self):
         sampler = ConcatBatchSampler(self.train_dataset, self.batch_size, shuffle=self.shuffle)

@@ -2,6 +2,8 @@ from dotmap import DotMap
 from lightning import LightningModule
 import torch
 
+import callbacks
+
 
 class Train(LightningModule):
     def __init__(self, network, loss_functions, optimizer):
@@ -23,7 +25,7 @@ class Train(LightningModule):
             self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
 
         # set visualization
-        self.visualizing = "visualizer" in self.trainer.callbacks
+        self.visualizing = any([isinstance(cb, callbacks.LiveVisualizer) for cb in self.trainer.callbacks])
 
     def shared_step(self, batch, batch_idx, stage):
         # training: get optimizer because manual optimization

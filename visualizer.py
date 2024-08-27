@@ -39,12 +39,12 @@ def event_frame_to_image(frame, pol_channels=[0, 1]):
     return frame_rgb
 
 
-def flow_frame_to_image(frame):
+def flow_map_to_image(frame):
     """
-    Convert an optical flow frame to an RGB image.
+    Convert an optical flow map to an RGB image.
 
     Args:
-        frame (np.ndarray): Optical flow frame with shape (2, height, width) and (y, x) flow channels.
+        frame (np.ndarray): Optical flow map with shape (2, height, width) and (y, x) flow channels.
 
     Returns:
         np.ndarray: RGB image of the optical flow frame.
@@ -83,11 +83,20 @@ class RerunVisualizer:
 
     def __init__(self, name):
 
-        blueprint = rrb.Blueprint(rrb.Spatial2DView(name="event_frame", origin="frame"))
+        blueprint = rrb.Blueprint(
+            rrb.Horizontal(
+                rrb.Spatial2DView(name="events", origin="events"),
+                rrb.Spatial2DView(name="flow", origin="flow"),
+            )
+        )
         rr.init(name)
         rr.serve(server_memory_limit="1%")
         rr.send_blueprint(blueprint, make_active=True)
 
-    def step(self, frame):
+    def event_frame(self, frame, name="events"):
         image = event_frame_to_image(frame)
-        rr.log("frame", rr.Image(image))
+        rr.log(name, rr.Image(image))
+
+    def flow_map(self, frame, name="flow"):
+        image = flow_map_to_image(frame)
+        rr.log(name, rr.Image(image))
