@@ -15,7 +15,8 @@ from data_utils import batched, ConcatBatchSampler, only_add_batch_dim, time_fir
 
 @dataclass
 class FrameSequence:
-    file: Path
+    root_dir: Path
+    recording: str
     chunk_size: int = 100
     seq_len: int | None = None
     crop: tuple[int, ...] | None = None  # height, width or top, left, bottom, right
@@ -23,14 +24,21 @@ class FrameSequence:
 
     def __post_init__(self):
         # open large h5 files only once
-        self.h5 = h5py.File(self.file, "r")
-        self.sensor_size = (260, 346)  # TODO: add to h5 file attributes
+        self.h5 = h5py.File(self.root_dir / f"{self.recording}.h5", "r")
+        self.sensor_size = self.h5.attrs["sensor_size"]
+        self.K_rect = torch.from_numpy(self.h5.attrs["K_rect"].astype(np.float32))
 
         # get number of frames
         self.n_frames = len(self.h5["events/frames"])
 
         # slice dataset, pre-compute crop and augmentations
         self.reset()
+
+        # set frame shape
+        self.frame_shape = (
+            self.crop_corners[2] - self.crop_corners[0],
+            self.crop_corners[3] - self.crop_corners[1],
+        )
 
         # mapping from chunks to individual frames
         # match seq_len if given
@@ -50,11 +58,11 @@ class FrameSequence:
                 h, w = self.crop
                 top = np.random.randint(self.sensor_size[0] - h + 1)  # +1 because exclusive
                 left = np.random.randint(self.sensor_size[1] - w + 1)
-                self.crop_ = (top, left, top + h, left + w)
+                self.crop_corners = (top, left, top + h, left + w)
             elif len(self.crop) == 4:  # top, left, bottom, right
-                self.crop_ = self.crop
+                self.crop_corners = self.crop
         else:
-            self.crop_ = (0, 0, *self.sensor_size)
+            self.crop_corners = (0, 0, *self.sensor_size)
 
     def init_augmentation(self):
         self.augmentation = []
@@ -82,7 +90,7 @@ class FrameSequence:
         frames = torch.from_numpy(self.h5["events/frames"][start:stop].astype(np.float32))
 
         # crop
-        top, left, bottom, right = self.crop_
+        top, left, bottom, right = self.crop_corners
         frames = frames[..., top:bottom, left:right]
 
         # apply augmentations
@@ -97,14 +105,19 @@ class FrameSequence:
             frames = frames.flip(3)
 
         # adapt camera matrices to crop and augmentations
-        # TODO: store in h5 file or load from yaml
-        K_rect = torch.tensor([[346, 0, 173, 0], [0, 346, 130, 0], [0, 0, 1, 0]], dtype=torch.float32)
+        K_rect = self.K_rect.clone()
+        K_rect[0, 2] -= left
+        K_rect[1, 2] -= top
+        if "flip_ud" in self.augmentation:
+            K_rect[1, 2] = (bottom - top - 1) - K_rect[1, 2]
+        if "flip_lr" in self.augmentation:
+            K_rect[0, 2] = (right - left - 1) - K_rect[0, 2]
         inv_K_rect = torch.linalg.pinv(K_rect)
 
         # return dotmap
         sample = DotMap()
         sample.frames = frames
-        sample.recording = None
+        sample.recording = self.recording
         sample.eofs = [i == len(self.slice) - 1 for i in chunk]
         sample.K_rect = K_rect
         sample.inv_K_rect = inv_K_rect
@@ -118,6 +131,7 @@ class DataModule(LightningDataModule):
         root_dir,
         train_seq_len,
         train_crop,
+        val_crop,
         augmentations,
         batch_size,
         shuffle,
@@ -128,6 +142,7 @@ class DataModule(LightningDataModule):
         self.root_dir = Path(root_dir)
         self.train_seq_len = train_seq_len
         self.train_crop = train_crop
+        self.val_crop = val_crop
         self.augmentations = augmentations
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -149,42 +164,30 @@ class DataModule(LightningDataModule):
             "indoor_forward_10_davis_with_gt",
         ]
 
-    @staticmethod
-    def get_frame_shape(crop):
-        if len(crop) == 2:
-            return crop
-        else:
-            return (crop[2] - crop[0], crop[3] - crop[1])
-
     def setup(self, stage):
         if stage == "fit":
-            self.train_frame_shape = (self.batch_size, 3, *self.get_frame_shape(self.train_crop))
             sequence = partial(
                 FrameSequence,
+                root_dir=self.root_dir,
                 seq_len=self.train_seq_len,
                 crop=self.train_crop,
                 augmentations=self.augmentations,
             )
             recordings = []
             for rec in self.train_recordings:
-                name = ("_").join(rec.split("_")[:2])
-                fname = self.root_dir / name / f"{rec}.h5"
-                seq = sequence(file=fname)
-                recordings.extend([fname] * int(seq.n_frames / seq.seq_len))
-            self.train_dataset = ConcatDataset([sequence(file=fname) for fname in recordings])
+                seq = sequence(recording=rec)
+                recordings.extend([rec] * int(seq.n_frames / seq.seq_len))
+            self.train_dataset = ConcatDataset([sequence(recording=rec) for rec in recordings])
+            self.train_frame_shape = (self.batch_size, 3, *sequence(recording=recordings[0]).frame_shape)
 
         if stage in ["fit", "validate"]:
-            self.val_frame_shape = (1, 3, 256, 344)
             sequence = partial(
                 FrameSequence,
-                crop=(2, 1, 258, 345),  # to allow 8x downsampling TODO: or with padder in network?
+                root_dir=self.root_dir,
+                crop=self.val_crop,
             )
-            recordings = []
-            for rec in self.val_recordings:
-                name = ("_").join(rec.split("_")[:2])
-                fname = self.root_dir / name / f"{rec}.h5"
-                recordings.append(fname)
-            self.val_dataset = ConcatDataset([sequence(file=fname) for fname in recordings])
+            self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.val_recordings])
+            self.val_frame_shape = (1, 3, *sequence(recording=recordings[0]).frame_shape)
 
     def train_dataloader(self):
         sampler = ConcatBatchSampler(self.train_dataset, self.batch_size, shuffle=self.shuffle)

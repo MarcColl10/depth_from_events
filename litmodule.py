@@ -19,7 +19,6 @@ class Train(LightningModule):
             self.network.trace(x)
 
         # wandb model watching
-        # TODO: quite heavy, maybe less/disable?
         if self.logger is not None:
             self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
 
@@ -32,7 +31,7 @@ class Train(LightningModule):
             optimizer = self.optimizers()
 
         # unpack
-        frames, eofs = batch.frames, batch.eofs
+        frames, eofs, rec = batch.frames, batch.eofs, batch.recording
 
         # go over sequence
         log = DotMap()
@@ -41,7 +40,7 @@ class Train(LightningModule):
             yhat = self.network(x)
 
             # go over loss functions
-            for name, loss_fn in self.loss_functions.items():
+            for name, loss_fn in self.loss_functions[stage].items():
                 # forward
                 loss_fn(x, yhat)
 
@@ -63,9 +62,12 @@ class Train(LightningModule):
                     # reset loss and log
                     # loss per tbptt window per batch sample
                     # default batch size (seq_len) gives same value but rounding errors
-                    # TODO: add recording name
                     for name, value in loss_fn.compute_and_reset().items():
-                        self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
+                        if stage == "train":
+                            self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
+                        elif stage == "validate":
+                            self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
+                            self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
 
             # add to log if visualizing
             if self.visualizing:
@@ -76,7 +78,7 @@ class Train(LightningModule):
             # reset if end of sequence
             if any(eof):
                 self.network.reset()
-                for loss_fn in self.loss_functions.values():
+                for loss_fn in self.loss_functions[stage].values():
                     loss_fn.reset()
 
         return log if self.visualizing else None
@@ -85,7 +87,7 @@ class Train(LightningModule):
         return self.shared_step(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
-        return self.shared_step(batch, batch_idx, "val")
+        return self.shared_step(batch, batch_idx, "validate")
 
     def configure_optimizers(self):
         self.gradient_clip_val = self.optimizer.keywords.pop("gradient_clip_val", 0.0)

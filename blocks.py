@@ -1,5 +1,8 @@
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class LazyConvGru(nn.Module):
@@ -50,21 +53,43 @@ class Residual(nn.Sequential):
         return x
 
 
+def feedforward(synapse, neuron):
+    return nn.Sequential(
+        OrderedDict(
+            [
+                ("synapse", synapse),
+                ("neuron", neuron),
+            ]
+        )
+    )
+
+
+def named_sequential(prefix, *args):
+    modules = OrderedDict([(f"{prefix}{i}", arg) for i, arg in enumerate(args)])
+    return nn.Sequential(modules)
+
+
+def named_residual(prefix, *args):
+    modules = OrderedDict([(f"{prefix}{i}", arg) for i, arg in enumerate(args)])
+    return Residual(modules)
+
+
 def res_block(out_channels, kernel_size, stride=1):
     padding = kernel_size // 2
     if stride != 1:
-        downsample = nn.Sequential(
+        downsample = feedforward(
             nn.LazyConv2d(out_channels, kernel_size, stride=stride, padding=padding),
             nn.Identity(),
         )
     else:
         downsample = nn.Identity()
-    block = Residual(
-        nn.Sequential(
+    block = named_residual(
+        "res",
+        feedforward(
             nn.LazyConv2d(out_channels, kernel_size, stride=stride, padding=padding),
             nn.ReLU(),
         ),
-        nn.Sequential(
+        feedforward(
             nn.LazyConv2d(out_channels, kernel_size, padding=padding),
             nn.Identity(),
         ),
@@ -74,27 +99,51 @@ def res_block(out_channels, kernel_size, stride=1):
     return block
 
 
+class LazyPadder(nn.Module):
+    """
+    Pad to size divisible by factor.
+    """
+
+    def __init__(self, factor):
+        super().__init__()
+        self.factor = factor
+
+    def forward(self, x):
+        _, _, h, w = x.shape
+        pad_h = (self.factor - h % self.factor) % self.factor
+        pad_w = (self.factor - w % self.factor) % self.factor
+        pad_top = pad_h // 2
+        pad_bottom = pad_h - pad_top
+        pad_left = pad_w // 2
+        pad_right = pad_w - pad_left
+        return F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+
+
 def conv_encoder(out_channels):
     """
     Components:
+    - Padding to size divisible by 8
     - Head with large kernel
     - 2 pairs of residual blocks with stride
     """
-    head = nn.Sequential(
+    padder = LazyPadder(8)
+    head = feedforward(
         nn.LazyConv2d(out_channels // 2, 7, stride=2, padding=3),
         nn.ReLU(),
     )
-    encoder = nn.Sequential(
+    encoder = named_sequential(
+        "conv",
         res_block(out_channels // 2, 3, stride=2),
         res_block(out_channels // 2, 3),
         res_block(out_channels, 3, stride=2),
         res_block(out_channels, 3),
     )
-    return nn.Sequential(head, encoder)
+    return named_sequential("enc", padder, head, encoder)
 
 
 def global_pool_decoder(out_features):
-    return nn.Sequential(
+    return named_sequential(
+        "dec",
         nn.AdaptiveAvgPool2d(1),
         nn.Flatten(),
         nn.LazyLinear(out_features),
@@ -102,17 +151,16 @@ def global_pool_decoder(out_features):
 
 
 def upsample_decoder(out_channels):
-    decoder = nn.Sequential(
-        nn.Sequential(
+    decoder = named_sequential(
+        "dec",
+        feedforward(
             nn.LazyConv2d(out_channels, 3, padding=1),
             nn.ReLU(),
         ),
-        nn.Sequential(
+        feedforward(
             nn.LazyConv2d(2, 3, padding=1),  # TODO: no bias?
             nn.Identity(),
         ),
-        nn.Sequential(
-            nn.Upsample(scale_factor=8, mode="bilinear", align_corners=False),
-        ),
+        nn.Upsample(scale_factor=8, mode="bilinear", align_corners=False),
     )
     return decoder

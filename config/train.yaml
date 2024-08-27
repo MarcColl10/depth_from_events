@@ -2,8 +2,11 @@ defaults:
   - datamodule: uzh_fpv
   - litmodule: train
   - network: flow
-  - loss_functions:
+  - loss_functions@loss_functions.train:
     - cmax_iter
+  - loss_functions@loss_functions.validate:
+    - cmax_iter
+    - rsat
   - optimizer: adamw
   - trainer: train
   - callbacks:

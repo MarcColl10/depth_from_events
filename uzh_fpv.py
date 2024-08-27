@@ -47,23 +47,16 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
     for rec, t0_skip in recordings.items():
         name = ("_").join(rec.split("_")[:2])  # eg indoor_forward
 
-        dest = root_dir / name
+        dest = root_dir
         dest.mkdir(parents=True, exist_ok=True)
-
-        # calibration
-        if not (dest / "calib.yaml").exists():  # calibration
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                tmp_dir = Path(tmp_dir)
-                download_and_extract_archive(f"{base_url_calib}{name}_calib_davis.zip", tmp_dir)
-                (tmp_dir / f"{name}_calib_davis" / f"camchain-..{name}_calib_davis_cam.yaml").rename(
-                    dest / "calib.yaml"
-                )
 
         # recording
         if not (dest / f"{rec}.h5").exists():
             with tempfile.TemporaryDirectory() as tmp_dir:
+                # get files
                 tmp_dir = Path(tmp_dir)
-                download_and_extract_archive(f"{base_url_rec}{rec}.zip", tmp_dir)
+                download_and_extract_archive(f"{base_url_calib}{name}_calib_davis.zip", tmp_dir)  # calibration
+                download_and_extract_archive(f"{base_url_rec}{rec}.zip", tmp_dir)  # recording
 
                 def append(dataset, data):
                     n = len(data)
@@ -120,20 +113,48 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                         start = bisect_left(h5f["events/t"], h5f["events/t"][0] + t0_skip)
                         splits = np.arange(start, len(h5f["events/t"]), count_window)
 
-                    # precompute backwards rectification
-                    if rectify:
-                        # kalibr equidistant = .fisheye
-                        with open(dest / "calib.yaml", "r") as f:
-                            cam_to_cam = yaml.safe_load(f)
-                        fx, fy, cx, cy = cam_to_cam["cam0"]["intrinsics"]
-                        K_dist = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
-                        K_rect = K_dist.copy()  # usually same for fisheye
-                        dist_coeffs = np.array(cam_to_cam["cam0"]["distortion_coeffs"])
-                        resolution = cam_to_cam["cam0"]["resolution"]  # xy
-                        rect_map_x, rect_map_y = cv2.fisheye.initUndistortRectifyMap(
-                            K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32F
-                        )
-                        bw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)
+                    # write splits to h5 so we can get corresponding raw events
+                    frame_splits = np.stack([splits[:-1], splits[1:]], axis=1)
+                    h5f.create_dataset(
+                        "events/splits", data=frame_splits, chunks=True, dtype=np.int64, **hdf5plugin.Zstd()
+                    )
+
+                    # precompute backward rectification
+                    # kalibr equidistant = .fisheye
+                    with open(tmp_dir / f"{name}_calib_davis" / f"camchain-..{name}_calib_davis_cam.yaml", "r") as f:
+                        cam_to_cam = yaml.safe_load(f)
+                    fx, fy, cx, cy = cam_to_cam["cam0"]["intrinsics"]
+                    K_dist = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+                    K_rect = K_dist.copy()  # usually same for fisheye
+                    dist_coeffs = np.array(cam_to_cam["cam0"]["distortion_coeffs"])
+                    resolution = cam_to_cam["cam0"]["resolution"]  # xy
+                    rect_map_x, rect_map_y = cv2.fisheye.initUndistortRectifyMap(
+                        K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32F
+                    )
+                    bw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)
+
+                    # precompute forward rectification
+                    w, h = resolution
+                    grid_x, grid_y = np.meshgrid(np.arange(w), np.arange(h))
+                    original_coords = np.stack([grid_x, grid_y], axis=-1).reshape(-1, 1, 2).astype(np.float32)
+                    rect_coords = cv2.fisheye.undistortPoints(original_coords, K_dist, dist_coeffs, P=K_rect)
+                    fw_rect_map = rect_coords.reshape(h, w, 2)
+
+                    # store fw/bw rect maps as datasets (too big for attrs)
+                    h5f.create_dataset(
+                        "fw_rect_map", data=fw_rect_map, chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                    )
+                    h5f.create_dataset(
+                        "bw_rect_map", data=bw_rect_map, chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                    )
+
+                    # store some useful attributes
+                    h5f.attrs["sensor_size"] = sensor_size
+                    h5f.attrs["time_window"] = time_window if time_window else False
+                    h5f.attrs["count_window"] = count_window if count_window else False
+                    h5f.attrs["ts_res"] = ts_res
+                    h5f.attrs["rectify"] = rectify
+                    h5f.attrs["K_rect"] = K_rect
 
                     chunk_size = 100
                     chunks = np.array_split(np.stack([splits[:-1], splits[1:]]), len(splits) // chunk_size, axis=1)
