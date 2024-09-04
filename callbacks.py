@@ -34,6 +34,7 @@ class LiveVisualizer(Callback):
 
     def on_batch_end(self, outputs):
         for events, flow in zip(outputs.frame, outputs.flow):
+            self.visualizer.set_counter()
             self.visualizer.event_frame(events[0].cpu())
             self.visualizer.flow_map(flow[0].cpu())
 

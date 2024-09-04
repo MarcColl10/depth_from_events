@@ -44,7 +44,7 @@ def flow_map_to_image(frame):
     Convert an optical flow map to an RGB image.
 
     Args:
-        frame (np.ndarray): Optical flow map with shape (2, height, width) and (y, x) flow channels.
+        frame (np.ndarray): Optical flow map with shape (2, height, width) and (x, y) flow channels.
 
     Returns:
         np.ndarray: RGB image of the optical flow frame.
@@ -59,7 +59,8 @@ def flow_map_to_image(frame):
     d_mag = mag.max() - min_mag
 
     # flow angle
-    ang = np.arctan2(*frame) + np.pi
+    x, y = frame
+    ang = np.arctan2(y, x) + np.pi
     ang *= 1.0 / np.pi / 2.0
 
     # flow color
@@ -90,8 +91,14 @@ class RerunVisualizer:
             )
         )
         rr.init(name)
-        rr.serve(server_memory_limit="1%")
+        rr.serve(server_memory_limit="10%")  # TODO: optional connect?
         rr.send_blueprint(blueprint, make_active=True)
+
+        self.counter = 0
+
+    def set_counter(self):
+        rr.set_time_sequence("frame", self.counter)
+        self.counter += 1
 
     def event_frame(self, frame, name="events"):
         image = event_frame_to_image(frame)
