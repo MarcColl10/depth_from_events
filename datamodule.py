@@ -21,6 +21,7 @@ class FrameSequence:
     seq_len: int | None = None
     crop: tuple[int, ...] | None = None  # height, width or top, left, bottom, right
     augmentations: list[str] | None = None
+    return_events: bool = False
 
     def __post_init__(self):
         # open large h5 files only once
@@ -89,7 +90,7 @@ class FrameSequence:
         start, stop = chunk[0], chunk[-1] + 1
         frames = torch.from_numpy(self.h5["events/frames"][start:stop].astype(np.float32))
 
-        # crop
+        # crop frames
         top, left, bottom, right = self.crop_corners
         frames = frames[..., top:bottom, left:right]
 
@@ -104,6 +105,58 @@ class FrameSequence:
         if "flip_lr" in self.augmentation:
             frames = frames.flip(3)
 
+        # get events
+        if self.return_events:
+            events, counts = [], []
+            splits = self.h5["events/splits"][start:stop]
+            for start, stop in splits:
+                # get slice
+                t = self.h5["events/t"][start:stop]  # float64
+                y = self.h5["events/y"][start:stop]  # uint16 or float32
+                x = self.h5["events/x"][start:stop]  # uint16 or float32
+                p = self.h5["events/p"][start:stop].astype(np.float32)  # bool to float32
+
+                # crop
+                # TODO: or < bottom?
+                mask = (y >= top) & (y < bottom - 1) & (x >= left) & (x < right - 1)
+                t, y, x, p = t[mask], y[mask], x[mask], p[mask]
+                y, x = y - top, x - left  # rebase to crop
+
+                # discard if roughly empty (like done with frames)
+                if len(t) < 10 or t[-1] == t[0]:
+                    events.append(np.zeros((0, 4), dtype=np.float32))
+                    counts.append(0)
+                    continue
+
+                # formatting
+                t_norm = (t - t[0]) / (t[-1] - t[0])  # normalize to [0, 1]
+                p = p * 2 - 1  # to {-1, 1}
+
+                # apply augmentations
+                if "flip_t" in self.augmentation:
+                    t_norm = 1 - t_norm
+                    t_norm, y, x, p = t_norm[::-1], y[::-1], x[::-1], p[::-1]
+                if "flip_pol" in self.augmentation:
+                    p *= -1
+                if "flip_ud" in self.augmentation:
+                    y = bottom - top - 1 - y
+                if "flip_lr" in self.augmentation:
+                    x = right - left - 1 - x
+
+                events.append(np.stack([t_norm, y, x, p], axis=-1).astype(np.float32))
+                counts.append(len(t))
+
+            # pad sequences
+            max_len = max(counts)
+            events = np.stack([np.pad(ev, ((0, max_len - len(ev)), (0, 0))) for ev in events])
+            events = torch.from_numpy(events)
+            counts = torch.tensor(counts, dtype=torch.int64)
+            auxs = DotMap(events=events, counts=counts)
+        else:
+            events = torch.zeros(self.chunk_size, 0, 4)
+            counts = torch.zeros(self.chunk_size, dtype=torch.int64)
+            auxs = DotMap(events=events, counts=counts)
+
         # adapt camera matrices to crop and augmentations
         K_rect = self.K_rect.clone()
         K_rect[0, 2] -= left
@@ -117,6 +170,7 @@ class FrameSequence:
         # return dotmap
         sample = DotMap()
         sample.frames = frames
+        sample.auxs = auxs
         sample.recording = self.recording
         sample.eofs = [i == len(self.slice) - 1 for i in chunk]
         sample.K_rect = K_rect
@@ -133,6 +187,7 @@ class DataModule(LightningDataModule):
         train_crop,
         val_crop,
         augmentations,
+        return_events,
         batch_size,
         shuffle,
         num_workers,
@@ -144,6 +199,7 @@ class DataModule(LightningDataModule):
         self.train_crop = train_crop
         self.val_crop = val_crop
         self.augmentations = augmentations
+        self.return_events = return_events
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
@@ -172,11 +228,12 @@ class DataModule(LightningDataModule):
                 seq_len=self.train_seq_len,
                 crop=self.train_crop,
                 augmentations=self.augmentations,
+                return_events=self.return_events,
             )
             recordings = []
             for rec in self.train_recordings:
                 seq = sequence(recording=rec)
-                recordings.extend([rec] * int(seq.n_frames / seq.seq_len))
+                recordings.extend([rec] * int(seq.n_frames / (seq.seq_len if seq.seq_len else seq.n_frames)))
             self.train_dataset = ConcatDataset([sequence(recording=rec) for rec in recordings])
             self.train_frame_shape = (self.batch_size, 3, *sequence(recording=recordings[0]).frame_shape)
 
@@ -185,6 +242,7 @@ class DataModule(LightningDataModule):
                 FrameSequence,
                 root_dir=self.root_dir,
                 crop=self.val_crop,
+                return_events=self.return_events,
             )
             self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.val_recordings])
             self.val_frame_shape = (1, 3, *sequence(recording=self.val_recordings[0]).frame_shape)
@@ -215,6 +273,7 @@ if __name__ == "__main__":
         train_seq_len=100,
         train_crop=(128, 128),
         augmentations=["flip_t", "flip_pol", "flip_ud", "flip_lr"],
+        return_events=True,
         batch_size=8,
         shuffle=True,
         num_workers=8,
