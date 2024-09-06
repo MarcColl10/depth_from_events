@@ -1,3 +1,4 @@
 rsat:
   _target_: cmax.RatioSquaredAvgTimestamps
+  use_events: true
   accumulation_window: 10

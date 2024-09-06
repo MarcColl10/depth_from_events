@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import ConcatDataset, DataLoader
 
-from data_utils import batched, ConcatBatchSampler, only_add_batch_dim, time_first_collate
+from data_utils import batched, ConcatBatchSampler, InfiniteDataLoader, only_add_batch_dim, time_first_collate
 
 
 @dataclass
@@ -49,9 +49,9 @@ class FrameSequence:
     def init_slice(self):
         if self.seq_len:  # randomly-sliced sequence of seq_len
             i_start = np.random.randint(0, self.n_frames - self.seq_len)
-            self.slice = range(i_start, i_start + self.seq_len)
+            self.slice = list(range(i_start, i_start + self.seq_len))
         else:  # full sequence
-            self.slice = range(self.n_frames)
+            self.slice = list(range(self.n_frames))
 
     def init_crop(self):
         if self.crop:
@@ -87,8 +87,12 @@ class FrameSequence:
         # get frames
         # >6x faster than in a loop
         chunk = self.chunk_map[idx]
-        start, stop = chunk[0], chunk[-1] + 1
+        start, stop = self.slice[chunk[0]], self.slice[chunk[-1]] + 1
         frames = torch.from_numpy(self.h5["events/frames"][start:stop].astype(np.float32))
+
+        # if returning events, no need for avg ts channel
+        if self.return_events:
+            frames = frames[:, :2]
 
         # crop frames
         top, left, bottom, right = self.crop_corners
@@ -97,7 +101,8 @@ class FrameSequence:
         # apply augmentations
         if "flip_t" in self.augmentation:
             frames = frames.flip(0)
-            frames[:, -1] = 1 - frames[:, -1]  # revert avg ts in [0, 1]
+            if not self.return_events:
+                frames[:, -1] = 1 - frames[:, -1]  # revert avg ts in [0, 1]
         if "flip_pol" in self.augmentation:
             frames[:, :2] = frames[:, :2].flip(1)  # only neg, pos
         if "flip_ud" in self.augmentation:
@@ -109,6 +114,8 @@ class FrameSequence:
         if self.return_events:
             events, counts = [], []
             splits = self.h5["events/splits"][start:stop]
+            if "flip_t" in self.augmentation:  # get windows in reverse
+                splits = splits[::-1]
             for start, stop in splits:
                 # get slice
                 t = self.h5["events/t"][start:stop]  # float64
@@ -134,8 +141,8 @@ class FrameSequence:
 
                 # apply augmentations
                 if "flip_t" in self.augmentation:
-                    t_norm = 1 - t_norm
-                    t_norm, y, x, p = t_norm[::-1], y[::-1], x[::-1], p[::-1]
+                    t_norm = 1 - t_norm  # revert ts in [0, 1]
+                    t_norm, y, x, p = t_norm[::-1], y[::-1], x[::-1], p[::-1]  # make chronological
                 if "flip_pol" in self.augmentation:
                     p *= -1
                 if "flip_ud" in self.augmentation:
@@ -235,7 +242,8 @@ class DataModule(LightningDataModule):
                 seq = sequence(recording=rec)
                 recordings.extend([rec] * int(seq.n_frames / (seq.seq_len if seq.seq_len else seq.n_frames)))
             self.train_dataset = ConcatDataset([sequence(recording=rec) for rec in recordings])
-            self.train_frame_shape = (self.batch_size, 3, *sequence(recording=recordings[0]).frame_shape)
+            channels = 2 if self.return_events else 3
+            self.train_frame_shape = (self.batch_size, channels, *sequence(recording=recordings[0]).frame_shape)
 
         if stage in ["fit", "validate"]:
             sequence = partial(
@@ -245,11 +253,12 @@ class DataModule(LightningDataModule):
                 return_events=self.return_events,
             )
             self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.val_recordings])
-            self.val_frame_shape = (1, 3, *sequence(recording=self.val_recordings[0]).frame_shape)
+            channels = 2 if self.return_events else 3
+            self.val_frame_shape = (1, channels, *sequence(recording=self.val_recordings[0]).frame_shape)
 
     def train_dataloader(self):
         sampler = ConcatBatchSampler(self.train_dataset, self.batch_size, shuffle=self.shuffle)
-        dataloader = DataLoader(
+        dataloader = InfiniteDataLoader(
             self.train_dataset, batch_sampler=sampler, num_workers=self.num_workers, collate_fn=time_first_collate
         )
         return dataloader
@@ -272,6 +281,7 @@ if __name__ == "__main__":
         root_dir="data/uzh_fpv_10ms_0.25ts_rect",
         train_seq_len=100,
         train_crop=(128, 128),
+        val_crop=(2, 1, 258, 345),
         augmentations=["flip_t", "flip_pol", "flip_ud", "flip_lr"],
         return_events=True,
         batch_size=8,

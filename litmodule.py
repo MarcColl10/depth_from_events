@@ -33,18 +33,21 @@ class Train(LightningModule):
             optimizer = self.optimizers()
 
         # unpack
-        frames, eofs, rec = batch.frames, batch.eofs, batch.recording
+        frames, auxs, eofs, rec = batch.frames, batch.auxs, batch.eofs, batch.recording
 
         # go over sequence
         log = DotMap()
-        for x, eof in zip(frames, eofs):
+        for i, (x, eof) in enumerate(zip(frames, eofs)):
+            # get auxiliary
+            aux = DotMap({k: v[i] for k, v in auxs.items()})
+
             # forward network
             yhat = self.network(x)
 
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():
                 # forward
-                loss_fn(x, yhat)
+                loss_fn(x, aux, yhat)
 
                 # backward if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
@@ -52,7 +55,8 @@ class Train(LightningModule):
 
                     # training: backprop and optimize
                     # TODO: scheduler
-                    if stage == "train":
+                    # TODO: proper way to deal with no events?
+                    if stage == "train" and loss is not None:
                         optimizer.zero_grad()
                         self.manual_backward(loss)
                         self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
@@ -65,9 +69,9 @@ class Train(LightningModule):
                     # loss per tbptt window per batch sample
                     # default batch size (seq_len) gives same value but rounding errors
                     for name, value in loss_fn.compute_and_reset().items():
-                        if stage == "train":
+                        if stage == "train" and value:
                             self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
-                        elif stage == "validate":
+                        elif stage == "validate" and value:
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
                             self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
 

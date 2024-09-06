@@ -3,7 +3,8 @@ import random
 
 from dotmap import DotMap
 import torch
-from torch.utils.data import BatchSampler
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import BatchSampler, DataLoader
 
 
 def batched(iterable, n, drop_last=False):
@@ -17,6 +18,38 @@ def batched(iterable, n, drop_last=False):
         if len(batch) == n or not drop_last:
             batches.append(batch)
     return batches
+
+
+class _RepeatSampler:
+    """
+    Sampler that repeats forever.
+    """
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)  # this shuffles
+
+
+class InfiniteDataLoader(DataLoader):
+    """
+    Allows pre-fetching first batch of next epoch.
+    Source: https://github.com/ultralytics/yolov5/blob/master/utils/dataloaders.py.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        object.__setattr__(self, "batch_sampler", _RepeatSampler(self.batch_sampler))
+        self.iterator = super().__iter__()
+
+    def __iter__(self):
+        for _ in range(len(self)):
+            yield next(self.iterator)
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
 
 
 class ConcatBatchSampler(BatchSampler):
@@ -61,6 +94,14 @@ def time_first_collate(batch):
     for key in batch[0]:
         if key in ["frames"]:
             collated_batch[key] = torch.stack([sample[key] for sample in batch], dim=1)
+        elif key in ["auxs"]:
+            collated_batch[key] = DotMap()
+            for k in batch[0][key]:
+                if k in ["events"]:
+                    collated_batch[key][k] = pad_sequence([sample[key][k].transpose(0, 1) for sample in batch])
+                    collated_batch[key][k] = collated_batch[key][k].transpose(0, 2).contiguous()
+                else:
+                    collated_batch[key][k] = torch.stack([sample[key][k] for sample in batch], dim=1)
         elif key in ["K_rect", "inv_K_rect"]:
             collated_batch[key] = torch.stack([sample[key] for sample in batch])  # constant over time
         elif key in ["eofs"]:
@@ -74,6 +115,9 @@ def only_add_batch_dim(batch):
     for key in batch:
         if key in ["frames"]:
             batch[key] = batch[key].unsqueeze(1)
+        elif key in ["auxs"]:
+            for k in batch[key]:
+                batch[key][k] = batch[key][k].unsqueeze(1)
         elif key in ["K_rect", "inv_K_rect"]:
             batch[key] = batch[key].unsqueeze(0)
         elif key in ["eofs"]:

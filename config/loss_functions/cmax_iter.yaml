@@ -1,4 +1,4 @@
 cmax:
   _target_: cmax.IterativeContrastMaximization
+  use_events: true
   accumulation_window: 10
-  base: 5
