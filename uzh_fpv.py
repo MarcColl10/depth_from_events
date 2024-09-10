@@ -28,23 +28,23 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
     # time in seconds to skip at the beginning to approx. start at takeoff
     root_dir = Path(root_dir)
     sensor_size = (260, 346)  # height, width
-    recordings = {
-        "indoor_forward_3_davis_with_gt": 30.0,
-        "indoor_forward_5_davis_with_gt": 30.0,
-        "indoor_forward_6_davis_with_gt": 30.0,
-        "indoor_forward_7_davis_with_gt": 30.0,
-        "indoor_forward_8_davis": 30.0,
-        "indoor_forward_9_davis_with_gt": 30.0,
-        "indoor_forward_10_davis_with_gt": 30.0,
-        "indoor_forward_11_davis": 30.0,
-        "indoor_forward_12_davis": 20.0,
-    }
+    recordings = [
+        ("indoor_forward_3_davis_with_gt", 30.0),
+        ("indoor_forward_5_davis_with_gt", 30.0),
+        ("indoor_forward_6_davis_with_gt", 30.0),
+        ("indoor_forward_7_davis_with_gt", 30.0),
+        ("indoor_forward_8_davis", 30.0),
+        ("indoor_forward_9_davis_with_gt", 30.0),
+        ("indoor_forward_10_davis_with_gt", 30.0),
+        ("indoor_forward_11_davis", 30.0),
+        ("indoor_forward_12_davis", 20.0),
+    ]
 
     # download
     base_url_rec = "http://rpg.ifi.uzh.ch/datasets/uzh-fpv-newer-versions/v3/"
     base_url_calib = "http://rpg.ifi.uzh.ch/datasets/uzh-fpv/calib/"
 
-    for rec, t0_skip in recordings.items():
+    for rec, t0_skip in recordings:
         name = ("_").join(rec.split("_")[:2])  # eg indoor_forward
 
         dest = root_dir
@@ -74,28 +74,38 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                         maxshape=(None, 3, *sensor_size),
                         chunks=True,
                         dtype=np.float32,
-                        **hdf5plugin.Zstd(),
+                        compression=hdf5plugin.Zstd(),
                     )
                     h5f.create_dataset(
-                        "events/t", (0,), maxshape=(None,), chunks=True, dtype=np.float64, **hdf5plugin.Zstd()
+                        "events/t", (0,), maxshape=(None,), chunks=True, dtype=np.float64, compression=hdf5plugin.Zstd()
                     )
                     h5f.create_dataset(
-                        "events/y", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, **hdf5plugin.Zstd()
+                        "events/y", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, compression=hdf5plugin.Zstd()
                     )
                     h5f.create_dataset(
-                        "events/x", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, **hdf5plugin.Zstd()
+                        "events/x", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, compression=hdf5plugin.Zstd()
                     )
                     h5f.create_dataset(
-                        "events/p", (0,), maxshape=(None,), chunks=True, dtype=np.bool_, **hdf5plugin.Zstd()
+                        "events/p", (0,), maxshape=(None,), chunks=True, dtype=np.bool_, compression=hdf5plugin.Zstd()
                     )
 
                     # if rectifying, also store rectified coordinates
                     if rectify:
                         h5f.create_dataset(
-                            "events/y_rect", (0,), maxshape=(None,), chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                            "events/y_rect",
+                            (0,),
+                            maxshape=(None,),
+                            chunks=True,
+                            dtype=np.float32,
+                            compression=hdf5plugin.Zstd(),
                         )
                         h5f.create_dataset(
-                            "events/x_rect", (0,), maxshape=(None,), chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                            "events/x_rect",
+                            (0,),
+                            maxshape=(None,),
+                            chunks=True,
+                            dtype=np.float32,
+                            compression=hdf5plugin.Zstd(),
                         )
 
                     events = pd.read_csv(
@@ -127,7 +137,7 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                     # write splits to h5 so we can get corresponding raw events
                     frame_splits = np.stack([splits[:-1], splits[1:]], axis=1)
                     h5f.create_dataset(
-                        "events/splits", data=frame_splits, chunks=True, dtype=np.int64, **hdf5plugin.Zstd()
+                        "events/splits", data=frame_splits, chunks=True, dtype=np.int64, compression=hdf5plugin.Zstd()
                     )
 
                     # precompute backward rectification
@@ -153,17 +163,17 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
 
                     # store fw/bw rect maps as datasets (too big for attrs)
                     h5f.create_dataset(
-                        "fw_rect_map", data=fw_rect_map, chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                        "fw_rect_map", data=fw_rect_map, chunks=True, dtype=np.float32, compression=hdf5plugin.Zstd()
                     )
                     h5f.create_dataset(
-                        "bw_rect_map", data=bw_rect_map, chunks=True, dtype=np.float32, **hdf5plugin.Zstd()
+                        "bw_rect_map", data=bw_rect_map, chunks=True, dtype=np.float32, compression=hdf5plugin.Zstd()
                     )
 
                     # store some useful attributes
                     h5f.attrs["sensor_size"] = sensor_size
                     h5f.attrs["time_window"] = time_window if time_window else False
                     h5f.attrs["count_window"] = count_window if count_window else False
-                    h5f.attrs["ts_res"] = ts_res
+                    h5f.attrs["ts_res"] = ts_res if ts_res else False
                     h5f.attrs["rectify"] = rectify
                     h5f.attrs["K_rect"] = K_rect
 
@@ -201,11 +211,14 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                             t_norm = (t - t[0]) / (t[-1] - t[0])
 
                             # make into event count frame
-                            # channels neg, pos, avg ts (quantized)
+                            # channels neg, pos, avg ts (optionally quantized)
                             frame = np.zeros((3, *sensor_size), dtype=np.float32)
                             np.add.at(frame[:2], (p, y, x), 1)
                             np.add.at(frame[-1], (y, x), t_norm)
-                            frame[-1] = np.round(frame[-1] / (frame[:2].sum(0) + 1e-9) / ts_res) * ts_res
+                            if ts_res:
+                                frame[-1] = np.round(frame[-1] / (frame[:2].sum(0) + 1e-9) / ts_res) * ts_res
+                            else:
+                                frame[-1] = frame[-1] / (frame[:2].sum(0) + 1e-9)
 
                             # backwards rectification
                             if rectify:
@@ -227,6 +240,4 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
 
 
 if __name__ == "__main__":
-    get_uzh_fpv_h5_frames(
-        "data/uzh_fpv_10ms_0.25ts_rect", time_window=0.01, count_window=None, ts_res=0.25, rectify=True
-    )
+    get_uzh_fpv_h5_frames("data/uzh_fpv_10ms_rect", time_window=0.01, count_window=None, ts_res=None, rectify=True)

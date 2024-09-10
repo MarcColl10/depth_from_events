@@ -1,38 +1,15 @@
-import torch
 import torch.nn as nn
 
-from blocks import conv_encoder, global_pool_decoder, LazyConvGru, upsample_decoder
+from blocks import conv_encoder, flatten_decoder, LazyConvGru, upsample_decoder
 from network_utils import NetworkWrapper
 
 
-class GlobalFlowNetwork(nn.Module):
-
-    def __init__(self, encoder_channels, memory_channels, scaling):
-        super().__init__()
-
-        self.scaling = scaling
-
-        self.encoder = conv_encoder(encoder_channels)
-        self.memory = LazyConvGru(memory_channels, 3)
-        self.decoder = global_pool_decoder(2)
-
-    def forward(self, input, hidden=None):
-        input = input[:, :2]  # only polarity channels
-        encoder = self.encoder(input)
-        memory = self.memory(encoder, hidden)
-        flow = self.decoder(memory)
-
-        flow *= self.scaling
-        flow_map = torch.ones_like(input) * flow.unsqueeze(-1).unsqueeze(-1)
-
-        return flow_map, memory
-
-
-class WrappedGlobalFlowNetwork(NetworkWrapper, GlobalFlowNetwork):
-    pass
-
-
 class FlowNetwork(nn.Module):
+    """
+    Optical flow prediction network following ID-Net.
+    """
+
+    modality = "flow"
 
     def __init__(self, encoder_channels, memory_channels, decoder_channels, scaling):
         super().__init__()
@@ -41,11 +18,10 @@ class FlowNetwork(nn.Module):
 
         self.encoder = conv_encoder(encoder_channels)
         self.memory = LazyConvGru(memory_channels, 3)
-        self.decoder = upsample_decoder(decoder_channels)
+        self.decoder = upsample_decoder(decoder_channels, mode=self.modality)
 
     def forward(self, input, hidden=None):
-        input = input[:, :2]  # only polarity channels
-        encoder = self.encoder(input)
+        encoder = self.encoder(input[:, :2])  # only polarity channels
         memory = self.memory(encoder, hidden)
         flow_map = self.decoder(memory)
 
@@ -55,4 +31,38 @@ class FlowNetwork(nn.Module):
 
 
 class WrappedFlowNetwork(NetworkWrapper, FlowNetwork):
+    pass
+
+
+class DisparityPoseNetwork(nn.Module):
+    """
+    Disparity and pose prediction network following ID-Net.
+    """
+
+    modality = "disparity"
+
+    def __init__(self, encoder_channels, memory_channels, decoder_channels, scaling):
+        super().__init__()
+
+        self.scaling = scaling
+
+        self.encoder = conv_encoder(encoder_channels)
+        self.memory = LazyConvGru(memory_channels, 3)
+        self.disp_decoder = upsample_decoder(decoder_channels, mode=self.modality)
+        self.pose_decoder = flatten_decoder(decoder_channels)
+
+    def forward(self, input, hidden=None):
+        encoder = self.encoder(input[:, :2])  # only polarity channels
+        memory = self.memory(encoder, hidden)
+        disp_map = self.disp_decoder(memory)
+        pose = self.pose_decoder(memory)
+
+        disp_scale, pose_scale = self.scaling
+        disp_map *= disp_scale
+        pose *= pose_scale
+
+        return (disp_map, pose), memory
+
+
+class WrappedDisparityPoseNetwork(NetworkWrapper, DisparityPoseNetwork):
     pass

@@ -13,11 +13,12 @@ def main(config):
     # dataset + dataloader = lightning datamodule
     datamodule = instantiate(config.datamodule)
 
-    # network + loss functions + optimizer = lightning module
+    # network + transform + loss functions + optimizer = lightning module
     network = instantiate(config.network)
+    transform = instantiate(config.transform)
     loss_functions = instantiate(config.loss_functions)
     optimizer = instantiate(config.optimizer)
-    litmodule = instantiate(config.litmodule, network, loss_functions, optimizer)
+    litmodule = instantiate(config.litmodule, network, transform, loss_functions, optimizer)
 
     # callbacks
     callbacks = instantiate(config.callbacks)

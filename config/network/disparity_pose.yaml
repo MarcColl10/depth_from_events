@@ -1,0 +1,5 @@
+_target_: network.WrappedDisparityPoseNetwork
+encoder_channels: 64
+memory_channels: 96
+decoder_channels: 96
+scaling: [1, 0.01]  # disparity, pose

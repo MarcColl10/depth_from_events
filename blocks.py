@@ -141,16 +141,13 @@ def conv_encoder(out_channels):
     return named_sequential("enc", padder, head, encoder)
 
 
-def global_pool_decoder(out_features):
-    return named_sequential(
-        "dec",
-        nn.AdaptiveAvgPool2d(1),
-        nn.Flatten(),
-        nn.LazyLinear(out_features),
-    )
-
-
-def upsample_decoder(out_channels):
+def upsample_decoder(out_channels, mode="flow"):
+    """
+    Select between flow (2-channel, identity)
+    and disparity (1-channel, sigmoid) decoder.
+    """
+    final_channels = 2 if mode == "flow" else 1
+    final_activation = nn.Identity() if mode == "flow" else nn.Sigmoid()
     decoder = named_sequential(
         "dec",
         feedforward(
@@ -158,9 +155,30 @@ def upsample_decoder(out_channels):
             nn.ReLU(),
         ),
         feedforward(
-            nn.LazyConv2d(2, 3, padding=1),  # TODO: no bias?
-            nn.Identity(),
+            nn.LazyConv2d(final_channels, 3, padding=1, bias=False),
+            final_activation,
         ),
         nn.Upsample(scale_factor=8, mode="bilinear", align_corners=False),
+    )
+    return decoder
+
+
+def flatten_decoder(out_channels):
+    decoder = named_sequential(
+        "dec",
+        feedforward(
+            nn.LazyConv2d(out_channels, 3, stride=2, padding=1),
+            nn.ReLU(),
+        ),
+        feedforward(
+            nn.LazyConv2d(out_channels, 3, stride=2, padding=1),
+            nn.ReLU(),
+        ),
+        feedforward(
+            nn.LazyConv2d(6, 3, padding=1, bias=False),
+            nn.Identity(),
+        ),
+        nn.AdaptiveAvgPool2d((1, 1)),
+        nn.Flatten(start_dim=1),
     )
     return decoder

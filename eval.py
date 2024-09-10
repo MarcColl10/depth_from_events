@@ -24,12 +24,14 @@ def main(overrides):
     # dataset + dataloader = lightning datamodule
     datamodule = instantiate(config.datamodule)
 
-    # network + loss functions = lightning module
+    # network + transform + loss functions = lightning module
     network = instantiate(config.network)
+    transform = instantiate(config.transform)
     loss_functions = instantiate(config.loss_functions)
     litmodule = get_class(config.litmodule._target_).load_from_checkpoint(
         checkpoint,
         network=network,
+        transform=transform,
         loss_functions=loss_functions,
         optimizer=None,
     )

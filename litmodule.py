@@ -6,10 +6,11 @@ import callbacks
 
 
 class Train(LightningModule):
-    def __init__(self, network, loss_functions, optimizer):
+    def __init__(self, network, transform, loss_functions, optimizer):
         super().__init__()
 
         self.network = network
+        self.transform = transform
         self.loss_functions = loss_functions
         self.optimizer = optimizer
         self.automatic_optimization = False  # manual because tbptt
@@ -43,6 +44,10 @@ class Train(LightningModule):
 
             # forward network
             yhat = self.network(x)
+
+            # transform network output
+            if self.transform is not None:
+                yhat = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
 
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():
