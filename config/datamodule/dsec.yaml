@@ -1,0 +1,10 @@
+_target_: datamodule.DsecDataModule
+root_dir: data/dsec_10ms_rect  # created with uzh_fpv.py
+train_seq_len: 100
+train_crop: [128, 128]  # hw for random, tlbr or null for fixed
+val_crop: null
+augmentations: [flip_t, flip_pol, flip_ud, flip_lr]
+return_events: false  # whether to include raw events alongside frames
+batch_size: 8
+shuffle: true
+num_workers: 8

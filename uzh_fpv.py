@@ -149,10 +149,9 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                     K_rect = K_dist.copy()  # usually same for fisheye
                     dist_coeffs = np.array(cam_to_cam["cam0"]["distortion_coeffs"])
                     resolution = cam_to_cam["cam0"]["resolution"]  # xy
-                    rect_map_x, rect_map_y = cv2.fisheye.initUndistortRectifyMap(
-                        K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32F
+                    bw_rect_map, _ = cv2.fisheye.initUndistortRectifyMap(
+                        K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32FC2
                     )
-                    bw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)
 
                     # precompute forward rectification
                     w, h = resolution

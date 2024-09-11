@@ -1,4 +1,4 @@
 cmax:
   _target_: cmax.IterativeContrastMaximization
-  use_events: true
+  use_events: ${....datamodule.return_events}
   accumulation_window: 10

@@ -211,22 +211,6 @@ class DataModule(LightningDataModule):
         self.shuffle = shuffle
         self.num_workers = num_workers
 
-    def prepare_data(self):
-        self.train_recordings = [
-            "indoor_forward_3_davis_with_gt",
-            "indoor_forward_5_davis_with_gt",
-            "indoor_forward_6_davis_with_gt",
-            "indoor_forward_7_davis_with_gt",
-            "indoor_forward_8_davis",
-            "indoor_forward_9_davis_with_gt",
-            "indoor_forward_10_davis_with_gt",
-            "indoor_forward_11_davis",
-            "indoor_forward_12_davis",
-        ]
-        self.val_recordings = [
-            "indoor_forward_10_davis_with_gt",
-        ]
-
     def setup(self, stage):
         if stage == "fit":
             sequence = partial(
@@ -274,13 +258,43 @@ class DataModule(LightningDataModule):
         return dataloader
 
 
+class UzhFpvDataModule(DataModule):
+    train_recordings = [
+        "indoor_forward_3_davis_with_gt",
+        "indoor_forward_5_davis_with_gt",
+        "indoor_forward_6_davis_with_gt",
+        "indoor_forward_7_davis_with_gt",
+        "indoor_forward_8_davis",
+        "indoor_forward_9_davis_with_gt",
+        "indoor_forward_10_davis_with_gt",
+        "indoor_forward_11_davis",
+        "indoor_forward_12_davis",
+    ]
+    val_recordings = [
+        "indoor_forward_10_davis_with_gt",
+    ]
+
+
+class DsecDataModule(DataModule):
+    train_recordings = [
+        "interlaken_00_c",
+        "interlaken_00_d",
+        "interlaken_00_e",
+        "interlaken_00_f",
+        "interlaken_00_g",
+    ]
+    val_recordings = [
+        "interlaken_00_f",
+    ]
+
+
 if __name__ == "__main__":
     from rich.progress import track
 
-    datamodule = DataModule(
+    datamodule = UzhFpvDataModule(
         root_dir="data/uzh_fpv_10ms_0.25ts_rect",
         train_seq_len=100,
-        train_crop=(128, 128),
+        train_crop=(2, 1, 258, 345),
         val_crop=(2, 1, 258, 345),
         augmentations=["flip_t", "flip_pol", "flip_ud", "flip_lr"],
         return_events=True,
@@ -288,6 +302,17 @@ if __name__ == "__main__":
         shuffle=True,
         num_workers=8,
     )
+    # datamodule = DsecDataModule(
+    #     root_dir="data/dsec_10ms_rect",
+    #     train_seq_len=100,
+    #     train_crop=None,
+    #     val_crop=None,
+    #     augmentations=["flip_t", "flip_pol", "flip_ud", "flip_lr"],
+    #     return_events=False,
+    #     batch_size=8,
+    #     shuffle=True,
+    #     num_workers=4,
+    # )
     datamodule.prepare_data()
     datamodule.setup("fit")
     dataloader = datamodule.train_dataloader()
