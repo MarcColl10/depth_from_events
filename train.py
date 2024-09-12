@@ -18,7 +18,8 @@ def main(config):
     transform = instantiate(config.transform)
     loss_functions = instantiate(config.loss_functions)
     optimizer = instantiate(config.optimizer)
-    litmodule = instantiate(config.litmodule, network, transform, loss_functions, optimizer)
+    scheduler = instantiate(config.scheduler)
+    litmodule = instantiate(config.litmodule, network, transform, loss_functions, optimizer, scheduler)
 
     # callbacks
     callbacks = instantiate(config.callbacks)

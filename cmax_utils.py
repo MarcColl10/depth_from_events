@@ -18,7 +18,8 @@ def extract_events_from_frames(frames):
     bi, pi, zi, yi, xi = nonzero_indices
 
     # combine nonzero polarities with xy and ts coordinates
-    avg_ts = frames[bi, -1, zi, yi, xi] + zi  # increment by passes
+    # start from 2: so add 2 to pi
+    avg_ts = frames[bi, 2 + pi, zi, yi, xi] + zi  # increment by passes
     xyz = torch.stack([xi, yi, avg_ts, zi], dim=1)
     pol = frames[bi, pi, zi, yi, xi] * (2 * pi - 1)
     combined = torch.cat([xyz, pol.view(-1, 1)], dim=1)

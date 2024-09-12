@@ -34,6 +34,7 @@ def main(overrides):
         transform=transform,
         loss_functions=loss_functions,
         optimizer=None,
+        scheduler=None,
     )
 
     # callbacks

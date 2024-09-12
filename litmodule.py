@@ -6,13 +6,14 @@ import callbacks
 
 
 class Train(LightningModule):
-    def __init__(self, network, transform, loss_functions, optimizer):
+    def __init__(self, network, transform, loss_functions, optimizer, scheduler):
         super().__init__()
 
         self.network = network
         self.transform = transform
         self.loss_functions = loss_functions
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.automatic_optimization = False  # manual because tbptt
 
     def setup(self, stage):
@@ -32,6 +33,7 @@ class Train(LightningModule):
         # training: get optimizer because manual optimization
         if stage == "train":
             optimizer = self.optimizers()
+            scheduler = self.lr_schedulers() if self.scheduler is not None else None
 
         # unpack
         frames, auxs, eofs, rec = batch.frames, batch.auxs, batch.eofs, batch.recording
@@ -59,13 +61,12 @@ class Train(LightningModule):
                     loss = loss_fn.backward()
 
                     # training: backprop and optimize
-                    # TODO: scheduler
-                    # TODO: proper way to deal with no events?
                     if stage == "train" and loss is not None:
                         optimizer.zero_grad()
                         self.manual_backward(loss)
                         self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
                         optimizer.step()
+                        scheduler.step() if scheduler is not None else None
 
                         # detach network state
                         self.network.detach()
@@ -101,6 +102,18 @@ class Train(LightningModule):
         return self.shared_step(batch, batch_idx, "validate")
 
     def configure_optimizers(self):
+        # split gradient clipping from optimizer
         self.gradient_clip_val = self.optimizer.keywords.pop("gradient_clip_val", 0.0)
         optimizer = self.optimizer(self.network.parameters())
-        return optimizer
+
+        # scheduler: compute steps per epoch
+        if self.scheduler is None:
+            return optimizer
+        else:
+            dl_len = len(self.trainer.datamodule.train_dataloader())  # TODO: does this affect dl?
+            steps_per_seq = (
+                self.trainer.datamodule.train_seq_len / self.loss_functions["train"]["cmax"].accumulation_window
+            )
+            steps_per_epoch = dl_len * steps_per_seq
+            scheduler = self.scheduler(optimizer, steps_per_epoch=steps_per_epoch)
+            return [optimizer], [scheduler]

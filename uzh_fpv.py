@@ -70,8 +70,8 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                 with h5py.File(dest / f"{rec}.h5", "w") as h5f:
                     h5f.create_dataset(
                         "events/frames",
-                        (0, 3, *sensor_size),
-                        maxshape=(None, 3, *sensor_size),
+                        (0, 4, *sensor_size),
+                        maxshape=(None, 4, *sensor_size),
                         chunks=True,
                         dtype=np.float32,
                         compression=hdf5plugin.Zstd(),
@@ -149,9 +149,10 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                     K_rect = K_dist.copy()  # usually same for fisheye
                     dist_coeffs = np.array(cam_to_cam["cam0"]["distortion_coeffs"])
                     resolution = cam_to_cam["cam0"]["resolution"]  # xy
-                    bw_rect_map, _ = cv2.fisheye.initUndistortRectifyMap(
-                        K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32FC2
+                    rect_map_x, rect_map_y = cv2.fisheye.initUndistortRectifyMap(
+                        K_dist, dist_coeffs, np.eye(3), K_rect, resolution, cv2.CV_32F
                     )
+                    bw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)
 
                     # precompute forward rectification
                     w, h = resolution
@@ -202,7 +203,7 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
 
                             # discard if few events or same timestamp
                             if len(t) < 10 or t[-1] == t[0]:
-                                frame = np.zeros((3, *sensor_size), dtype=np.float32)
+                                frame = np.zeros((4, *sensor_size), dtype=np.float32)
                                 frames.append(frame)
                                 continue
 
@@ -210,14 +211,15 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
                             t_norm = (t - t[0]) / (t[-1] - t[0])
 
                             # make into event count frame
-                            # channels neg, pos, avg ts (optionally quantized)
-                            frame = np.zeros((3, *sensor_size), dtype=np.float32)
+                            # channels neg, pos, avg ts per pol (optionally quantized)
+                            # TODO: force quantization, frames dataset to uint8
+                            frame = np.zeros((4, *sensor_size), dtype=np.float32)
                             np.add.at(frame[:2], (p, y, x), 1)
-                            np.add.at(frame[-1], (y, x), t_norm)
+                            np.add.at(frame[2:], (p, y, x), t_norm)
                             if ts_res:
-                                frame[-1] = np.round(frame[-1] / (frame[:2].sum(0) + 1e-9) / ts_res) * ts_res
+                                frame[2:] = np.round(frame[2:] / (frame[:2] + 1e-9) / ts_res) * ts_res
                             else:
-                                frame[-1] = frame[-1] / (frame[:2].sum(0) + 1e-9)
+                                frame[2:] = frame[2:] / (frame[:2] + 1e-9)
 
                             # backwards rectification
                             if rectify:
@@ -239,4 +241,7 @@ def get_uzh_fpv_h5_frames(root_dir, time_window, count_window, ts_res, rectify):
 
 
 if __name__ == "__main__":
-    get_uzh_fpv_h5_frames("data/uzh_fpv_10ms_rect", time_window=0.01, count_window=None, ts_res=None, rectify=True)
+    # TODO: allow specifying local files instead of downloading every time
+    get_uzh_fpv_h5_frames(
+        "data/uzh_fpv_10ms_0.25dualts_rect", time_window=0.01, count_window=None, ts_res=0.25, rectify=True
+    )

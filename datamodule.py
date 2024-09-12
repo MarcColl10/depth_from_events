@@ -102,9 +102,11 @@ class FrameSequence:
         if "flip_t" in self.augmentation:
             frames = frames.flip(0)
             if not self.return_events:
-                frames[:, -1] = 1 - frames[:, -1]  # revert avg ts in [0, 1]
+                frames[:, 2:] = 1 - frames[:, 2:]  # revert avg ts in [0, 1]
         if "flip_pol" in self.augmentation:
             frames[:, :2] = frames[:, :2].flip(1)  # only neg, pos
+            if not self.return_events:
+                frames[:, 2:] = frames[:, 2:].flip(1)  # flip avg ts
         if "flip_ud" in self.augmentation:
             frames = frames.flip(2)
         if "flip_lr" in self.augmentation:
@@ -226,7 +228,7 @@ class DataModule(LightningDataModule):
                 seq = sequence(recording=rec)
                 recordings.extend([rec] * int(seq.n_frames / (seq.seq_len if seq.seq_len else seq.n_frames)))
             self.train_dataset = ConcatDataset([sequence(recording=rec) for rec in recordings])
-            channels = 2 if self.return_events else 3
+            channels = 2 if self.return_events else 4
             self.train_frame_shape = (self.batch_size, channels, *sequence(recording=recordings[0]).frame_shape)
 
         if stage in ["fit", "validate"]:
@@ -237,7 +239,7 @@ class DataModule(LightningDataModule):
                 return_events=self.return_events,
             )
             self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.val_recordings])
-            channels = 2 if self.return_events else 3
+            channels = 2 if self.return_events else 4
             self.val_frame_shape = (1, channels, *sequence(recording=self.val_recordings[0]).frame_shape)
 
     def train_dataloader(self):
