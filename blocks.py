@@ -87,14 +87,14 @@ def res_block(out_channels, kernel_size, stride=1):
         "res",
         feedforward(
             nn.LazyConv2d(out_channels, kernel_size, stride=stride, padding=padding),
-            nn.ReLU(),
+            nn.ELU(),
         ),
         feedforward(
             nn.LazyConv2d(out_channels, kernel_size, padding=padding),
             nn.Identity(),
         ),
         downsample,
-        nn.ReLU(),
+        nn.ELU(),
     )
     return block
 
@@ -129,7 +129,7 @@ def conv_encoder(out_channels):
     padder = LazyPadder(8)
     head = feedforward(
         nn.LazyConv2d(out_channels // 2, 7, stride=2, padding=3),
-        nn.ReLU(),
+        nn.ELU(),
     )
     encoder = named_sequential(
         "conv",
@@ -152,7 +152,7 @@ def upsample_decoder(out_channels, mode="flow"):
         "dec",
         feedforward(
             nn.LazyConv2d(out_channels, 3, padding=1),
-            nn.ReLU(),
+            nn.ELU(),
         ),
         feedforward(
             nn.LazyConv2d(final_channels, 3, padding=1, bias=False),
@@ -168,11 +168,11 @@ def flatten_decoder(out_channels):
         "dec",
         feedforward(
             nn.LazyConv2d(out_channels, 3, stride=2, padding=1),
-            nn.ReLU(),
+            nn.ELU(),
         ),
         feedforward(
             nn.LazyConv2d(out_channels, 3, stride=2, padding=1),
-            nn.ReLU(),
+            nn.ELU(),
         ),
         feedforward(
             nn.LazyConv2d(6, 3, padding=1, bias=False),

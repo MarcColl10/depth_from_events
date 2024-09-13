@@ -9,7 +9,7 @@ defaults:
     - cmax_iter
     - rsat
   - optimizer: adamw
-  - scheduler: nothing
+  - scheduler: onecycle
   - trainer: train
   - callbacks:
     - progress

@@ -89,6 +89,7 @@ class FrameSequence:
         chunk = self.chunk_map[idx]
         start, stop = self.slice[chunk[0]], self.slice[chunk[-1]] + 1
         frames = torch.from_numpy(self.h5["events/frames"][start:stop].astype(np.float32))
+        frames[:, 2:] *= self.h5.attrs["ts_res"]  # from int to quantized float again
 
         # if returning events, no need for avg ts channel
         if self.return_events:

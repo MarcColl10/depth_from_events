@@ -51,6 +51,9 @@ class Train(LightningModule):
             if self.transform is not None:
                 yhat = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
 
+            # log model prediction
+            self.log(f"{stage}/yhat_abs_mean", yhat.abs().mean())
+
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():
                 # forward
@@ -66,6 +69,7 @@ class Train(LightningModule):
                         self.manual_backward(loss)
                         self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
                         optimizer.step()
+                        self.log("train/lr", scheduler.get_last_lr()[0]) if scheduler is not None else None
                         scheduler.step() if scheduler is not None else None
 
                         # detach network state
@@ -114,6 +118,6 @@ class Train(LightningModule):
             steps_per_seq = (
                 self.trainer.datamodule.train_seq_len / self.loss_functions["train"]["cmax"].accumulation_window
             )
-            steps_per_epoch = dl_len * steps_per_seq
+            steps_per_epoch = int(dl_len * steps_per_seq)
             scheduler = self.scheduler(optimizer, steps_per_epoch=steps_per_epoch)
             return [optimizer], [scheduler]
