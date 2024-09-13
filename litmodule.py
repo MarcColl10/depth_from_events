@@ -52,7 +52,7 @@ class Train(LightningModule):
                 yhat = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
 
             # log model prediction
-            self.log(f"{stage}/yhat_abs_mean", yhat.abs().mean())
+            self.log(f"{stage}/yhat_abs_mean", yhat.abs().mean(), batch_size=1)
 
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():
