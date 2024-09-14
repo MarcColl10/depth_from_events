@@ -1,5 +1,5 @@
 defaults:
-  - datamodule: uzh_fpv
+  - datamodule: dsec
   - litmodule: train
   - network: flow
   - transform: nothing

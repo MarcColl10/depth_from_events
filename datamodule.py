@@ -11,6 +11,8 @@ import torch
 from torch.utils.data import ConcatDataset, DataLoader
 
 from data_utils import batched, ConcatBatchSampler, InfiniteDataLoader, only_add_batch_dim, time_first_collate
+from dsec import DSEC_TRAIN_RECORDINGS, DSEC_VAL_RECORDINGS
+from uzh_fpv import UZH_FPV_TRAIN_RECORDINGS, UZH_FPV_VAL_RECORDINGS
 
 
 @dataclass
@@ -262,33 +264,13 @@ class DataModule(LightningDataModule):
 
 
 class UzhFpvDataModule(DataModule):
-    train_recordings = [
-        "indoor_forward_3_davis_with_gt",
-        "indoor_forward_5_davis_with_gt",
-        "indoor_forward_6_davis_with_gt",
-        "indoor_forward_7_davis_with_gt",
-        "indoor_forward_8_davis",
-        "indoor_forward_9_davis_with_gt",
-        "indoor_forward_10_davis_with_gt",
-        "indoor_forward_11_davis",
-        "indoor_forward_12_davis",
-    ]
-    val_recordings = [
-        "indoor_forward_10_davis_with_gt",
-    ]
+    train_recordings = UZH_FPV_TRAIN_RECORDINGS
+    val_recordings = UZH_FPV_VAL_RECORDINGS
 
 
 class DsecDataModule(DataModule):
-    train_recordings = [
-        "interlaken_00_c",
-        "interlaken_00_d",
-        "interlaken_00_e",
-        "interlaken_00_f",
-        "interlaken_00_g",
-    ]
-    val_recordings = [
-        "interlaken_00_f",
-    ]
+    train_recordings = DSEC_TRAIN_RECORDINGS
+    val_recordings = DSEC_VAL_RECORDINGS
 
 
 if __name__ == "__main__":

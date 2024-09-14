@@ -11,6 +11,22 @@ from torchvision.datasets.utils import download_and_extract_archive
 import yaml
 
 
+UZH_FPV_TRAIN_RECORDINGS = [
+    "indoor_forward_3_davis_with_gt",
+    "indoor_forward_5_davis_with_gt",
+    "indoor_forward_6_davis_with_gt",
+    "indoor_forward_7_davis_with_gt",
+    "indoor_forward_8_davis",
+    "indoor_forward_9_davis_with_gt",
+    "indoor_forward_10_davis_with_gt",
+    "indoor_forward_11_davis",
+    "indoor_forward_12_davis",
+]
+UZH_FPV_VAL_RECORDINGS = [
+    "indoor_forward_10_davis_with_gt",
+]
+
+
 def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, subsample, ts_res, rectify):
     """
     Convert UZH-FPV dataset to h5 files containing raw events and event frames.
@@ -42,6 +58,9 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
         ("indoor_forward_12_davis", 20.0),
     ]
 
+    # make root directory
+    root_dir.mkdir(parents=True, exist_ok=True)
+
     # download urls
     base_url_rec = "http://rpg.ifi.uzh.ch/datasets/uzh-fpv-newer-versions/v3/"
     base_url_calib = "http://rpg.ifi.uzh.ch/datasets/uzh-fpv/calib/"
@@ -61,7 +80,6 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
             (raw_dir / "calib" / f"{name}_calib_davis.zip").unlink()
 
         # process to h5
-        root_dir.mkdir(parents=True, exist_ok=True)
         if not (root_dir / f"{rec}.h5").exists():
             # handy
             def append(dataset, data):
@@ -192,10 +210,11 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
                 h5f.attrs["sensor_size"] = sensor_size
                 h5f.attrs["time_window"] = time_window if time_window else False
                 h5f.attrs["count_window"] = count_window if count_window else False
-                h5f.attrs["subsample"] = subsample
+                h5f.attrs["subsample"] = subsample if subsample else False
                 h5f.attrs["ts_res"] = ts_res
                 h5f.attrs["rectify"] = rectify
                 h5f.attrs["K_rect"] = K_rect
+                h5f.attrs["t_offset"] = 0
 
                 # convert all to rectified coordinates
                 if rectify:

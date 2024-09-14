@@ -10,26 +10,24 @@ def extract_events_from_frames(frames):
     # get shape
     b, _, _, _, _ = frames.shape
 
-    # do per-polarity
-    # polarity channel is nonzero
-    output = [[] for _ in range(b)]
-    nonzero_mask = frames[:, :2].gt(0)  # (b, p, d, h, w)
-    nonzero_indices = nonzero_mask.nonzero(as_tuple=True)
-    bi, pi, zi, yi, xi = nonzero_indices
+    # get indices of nonzero counts directly (wo creating mask)
+    nonzero_indices = frames[:, :2].nonzero(as_tuple=True)
+    bi, pi, zi, yi, xi = nonzero_indices  # b, p, d, h, w
 
     # combine nonzero polarities with xy and ts coordinates
     # start from 2: so add 2 to pi
     avg_ts = frames[bi, 2 + pi, zi, yi, xi] + zi  # increment by passes
     xyz = torch.stack([xi, yi, avg_ts, zi], dim=1)
     pol = frames[bi, pi, zi, yi, xi] * (2 * pi - 1)
-    combined = torch.cat([xyz, pol.view(-1, 1)], dim=1)
+    combined = torch.cat([xyz, pol.unsqueeze(1)], dim=1)
 
-    # append
-    for i in range(b):
-        output[i] += [combined[bi == i]]
+    # get count per batch dim
+    # split into list per batch element
+    counts = torch.bincount(bi, minlength=b)
+    outputs = combined.split(counts.tolist())
 
     # pad to batch
-    output = pad_sequence([torch.cat(o) for o in output], batch_first=True)
+    output = pad_sequence(outputs, batch_first=True)
 
     return output
 
