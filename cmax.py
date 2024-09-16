@@ -13,11 +13,13 @@ class ContrastMaximization(nn.Module):
 
     cls_name = None
 
-    def __init__(self, use_events, accumulation_window):
+    def __init__(self, use_events, accumulation_window, base, select):
         super().__init__()
 
         self.use_events = use_events
         self.accumulation_window = accumulation_window
+        self.base = base
+        self.select = select
 
         self.total_loss = 0
         self.passes = 0
@@ -47,14 +49,13 @@ class ContrastMaximization(nn.Module):
 
         return events, flow_maps
 
-    @staticmethod
-    def compute_cmax_loss(events, flow_maps):
+    def compute_cmax_loss(self, events, flow_maps):
         # warp events: (b, n, 4) -> (b, n, d + 1, 5) with (x, y, t, t_orig, p)
-        warped_events = iterative_3d_warp_cuda(events, flow_maps)
+        warped_events = iterative_3d_warp_cuda(events, flow_maps, self.base)
 
         # build iwe and iwt with (trilinear) splatting
         _, _, h, w, _ = flow_maps.shape
-        iwe, iwt = build_iwe(warped_events, (h, w))  # (b, 2, d + 1, h, w)
+        iwe, iwt = build_iwe(warped_events, self.base, self.select, (h, w))  # (b, 2, d + 1, h, w)
 
         # split into negative and positive polarity
         iwe_neg, iwe_pos = iwe.unbind(1)

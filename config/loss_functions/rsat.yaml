@@ -2,3 +2,5 @@ rsat:
   _target_: cmax.RatioSquaredAvgTimestamps
   use_events: ${....datamodule.return_events}
   accumulation_window: 10
+  base: ${.accumulation_window}
+  select: null  # everything

@@ -3,15 +3,21 @@ import torch
 from cuda_3d_ops import trilinear_splat_cuda
 
 
-def build_iwe(warped_events, resolution):
-    # get shape
-    b, _, d, _ = warped_events.shape
+def build_iwe(warped_events, base, select, resolution):
+    # select reference times
+    if select:
+        start, stop = select
+        warped_events = warped_events[:, :, start:stop]
+        b, _, d, _ = warped_events.shape
+    else:
+        b, _, d, _ = warped_events.shape
+        start, stop = 0, d
 
     # unpack events, compute contribution
     # only consider inside base
     x, y, t, t_orig, p = warped_events.unbind(-1)
-    t_ref = torch.arange(d, device=warped_events.device)
-    t_contrib = 1 - (t_ref - t_orig).abs() / (d - 1)
+    t_ref = torch.arange(start, stop, device=warped_events.device)
+    t_contrib = 1 - (t_ref - t_orig).abs() / base
 
     # per-polarity image of warped events
     # TODO: make more efficient?

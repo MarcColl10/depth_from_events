@@ -2,3 +2,5 @@ cmax:
   _target_: cmax.IterativeContrastMaximization
   use_events: ${....datamodule.return_events}
   accumulation_window: 10
+  base: 5
+  select: null  # start:stop, null for everything
