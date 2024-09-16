@@ -1,7 +1,7 @@
 _target_: datamodule.DsecDataModule
-root_dir: data/dsec_10ms_0.25ts_rect  # created with uzh_fpv.py
+root_dir: data/dsec_10ms_subs2_0.25ts_rect  # created with uzh_fpv.py
 train_seq_len: 100
-train_crop: [128, 128]  # hw for random, tlbr or null for fixed
+train_crop: null  # hw for random, tlbr or null for fixed
 val_crop: null
 augmentations: [flip_t, flip_pol, flip_ud, flip_lr]
 return_events: false  # whether to include raw events alongside frames

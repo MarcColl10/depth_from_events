@@ -37,8 +37,8 @@ DSEC_TRAIN_RECORDINGS = [
 ]
 DSEC_VAL_RECORDINGS = [
     "thun_00_a",
-    "zurich_city_01_a",
-    "zurich_city_09_a",
+    # "zurich_city_01_a",
+    # "zurich_city_09_a",
 ]
 
 
@@ -164,10 +164,62 @@ def get_dsec_h5_frames(root_dir, download_dir, time_window, count_window, subsam
 
             # put everything in same h5
             with h5py.File(root_dir / f"{name}.h5", "w") as h5f:
-                # copy events
-                # keeps compresion the same
                 with h5py.File(raw_dir / "events_left" / "events.h5", "r") as h5f_events:
-                    h5f_events.copy("events", h5f)
+                    # get events
+                    if subsample is None:  # copy
+                        h5f_events.copy("events", h5f)
+                    else:  # subsample
+                        # create datasets
+                        h5f.create_dataset(
+                            "events/t",
+                            (0,),
+                            maxshape=(None,),
+                            chunks=True,
+                            dtype=np.uint32,
+                            compression=hdf5plugin.Zstd(),
+                        )
+                        h5f.create_dataset(
+                            "events/y",
+                            (0,),
+                            maxshape=(None,),
+                            chunks=True,
+                            dtype=np.uint16,
+                            compression=hdf5plugin.Zstd(),
+                        )
+                        h5f.create_dataset(
+                            "events/x",
+                            (0,),
+                            maxshape=(None,),
+                            chunks=True,
+                            dtype=np.uint16,
+                            compression=hdf5plugin.Zstd(),
+                        )
+                        h5f.create_dataset(
+                            "events/p",
+                            (0,),
+                            maxshape=(None,),
+                            chunks=True,
+                            dtype=np.uint8,
+                            compression=hdf5plugin.Zstd(),
+                        )
+
+                        # loop over events and subsample
+                        chunk_size = 100000
+                        n = len(h5f_events["events/t"])
+                        chunks = [(i, min(i + chunk_size, n)) for i in range(0, n, chunk_size)]
+                        for start, stop in track(chunks, description=f"Subsampling {name}..."):
+                            t = h5f_events["events/t"][start:stop]
+                            y = h5f_events["events/y"][start:stop]
+                            x = h5f_events["events/x"][start:stop]
+                            p = h5f_events["events/p"][start:stop]
+                            mask = (y % subsample == 0) & (x % subsample == 0)
+                            t, y, x, p = t[mask], y[mask] // subsample, x[mask] // subsample, p[mask]
+                            append(h5f["events/t"], t)
+                            append(h5f["events/y"], y)
+                            append(h5f["events/x"], x)
+                            append(h5f["events/p"], p)
+
+                    # get offset for matching to targets
                     t_offset = h5f_events["t_offset"][()]
 
                 # create other datasets
@@ -222,12 +274,17 @@ def get_dsec_h5_frames(root_dir, download_dir, time_window, count_window, subsam
                 with open(raw_dir / "calibration" / "cam_to_cam.yaml") as f:
                     cam_to_cam = yaml.safe_load(f)
                 fx, fy, cx, cy = cam_to_cam["intrinsics"]["cam0"]["camera_matrix"]  # distorted image
+                resolution = cam_to_cam["intrinsics"]["cam0"]["resolution"]  # xy
+                if subsample is not None:
+                    resolution = [r // subsample for r in resolution]
+                    fx, fy, cx, cy = [v / subsample for v in [fx, fy, cx, cy]]
                 K_dist = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
                 fx, fy, cx, cy = cam_to_cam["intrinsics"]["camRect0"]["camera_matrix"]  # rectified image
+                if subsample is not None:
+                    fx, fy, cx, cy = [v / subsample for v in [fx, fy, cx, cy]]
                 K_rect = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
                 R_rect = np.array(cam_to_cam["extrinsics"]["R_rect0"])
                 dist_coeffs = np.array(cam_to_cam["intrinsics"]["cam0"]["distortion_coeffs"])
-                resolution = cam_to_cam["intrinsics"]["cam0"]["resolution"]  # xy
                 bw_rect_map, _ = cv2.initUndistortRectifyMap(
                     K_dist, dist_coeffs, R_rect, K_rect, resolution, cv2.CV_32FC2
                 )
@@ -329,7 +386,7 @@ def get_dsec_h5_frames(root_dir, download_dir, time_window, count_window, subsam
 
 if __name__ == "__main__":
     time_window = 10000
-    subsample = None
+    subsample = 2
     ts_res = 0.25
     rectify = True
     root_dir = f"data/dsec_{int(time_window / 1000)}ms{'_subs' + str(subsample) if subsample is not None else ''}_{ts_res}ts{'_rect' if rectify else ''}"

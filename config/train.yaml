@@ -8,7 +8,7 @@ defaults:
   - loss_functions@loss_functions.validate:
     - cmax_iter
     - rsat
-  - optimizer: adamw
+  - optimizer: adam
   - scheduler: nothing
   - trainer: train
   - callbacks:
