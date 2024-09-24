@@ -1,0 +1,14 @@
+_target_: dsec_old.DsecDataModule
+root_dir: ../occlusion_accretion_flow/data/datasets/DSEC
+time_window: 10000  # 10ms in us
+count_thresh: 20000
+train_seq_len: 100
+train_crop: [128, 128]  # hw for random, tlbr or null for fixed
+val_crop: null
+rectify: true
+augmentations: [backward, vertical, horizontal, polarity]
+return_events: true  # always
+batch_size: 8
+shuffle: true
+num_workers: 8
+download: false  # don't check downloads

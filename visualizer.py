@@ -1,4 +1,5 @@
-from matplotlib.colors import hsv_to_rgb
+import matplotlib.cm as cm
+from matplotlib.colors import hsv_to_rgb, Normalize
 import numpy as np
 import rerun as rr
 import rerun.blueprint as rrb
@@ -74,27 +75,64 @@ def flow_map_to_image(frame):
     return frame_rgb
 
 
+def disparity_map_to_image(disparity, reverse=False):
+    """
+    Convert a disparity (or depth) map to an RGB image.
+    Source: https://github.com/uzh-rpg/DSEC/blob/main/scripts/dataset/visualization.py
+
+    Args:
+        disparity (np.ndarray): Disparity map with shape (1, height, width).
+        reverse (bool): Whether to reverse the colormap (for depth maps).
+
+    Returns:
+        np.ndarray: RGB image of the disparity map.
+    """
+
+    # check shape
+    assert disparity.ndim == 3 and disparity.shape[0] == 1, "Disparity must have shape (1, height, width)."
+
+    # disparity magnitude for nonzero pixels
+    disparity = disparity.squeeze(0)  # remove channel
+    disp_pixels = np.argwhere(disparity > 0)
+    y, x = disp_pixels
+    disp_valid = disparity[y, x]
+    min_disp = disp_valid.min() if len(disp_valid) > 0 else 0
+    max_disp = disp_valid.max() if len(disp_valid) > 0 else 0
+
+    # disparity colormap (in reverse if depth map)
+    norm = Normalize(vmin=min_disp, vmax=max_disp, clip=True)
+    mapper = cm.ScalarMappable(norm=norm, cmap="inferno" if not reverse else "inferno_r")
+    disp_color = mapper.to_rgba(disp_valid)[..., :3]
+    image = np.zeros((*disparity.shape, 3))
+
+    # to rgb ints
+    image[y, x] = disp_color
+    image = (image * 255).astype(np.uint8)
+
+    return image
+
+
 class RerunVisualizer:
     """
     Live visualizer using Rerun.
-
-    TODO:
-    - Buffer only single frame, set_time_sequence doesn't overwrite
     """
 
-    def __init__(self, name):
+    def __init__(self, app_id, server, web):
 
         blueprint = rrb.Blueprint(
             rrb.Horizontal(
                 rrb.Spatial2DView(name="events", origin="events"),
                 rrb.Spatial2DView(name="flow", origin="flow"),
+                rrb.Spatial2DView(name="disparity", origin="disparity"),
+                rrb.Spatial3DView(name="pose", origin="pose"),
             )
         )
-        rr.init(name)
-        rr.serve(server_memory_limit="10%")  # TODO: optional connect?
+        rr.init(app_id)
+        rr.serve() if web else rr.connect(server)
         rr.send_blueprint(blueprint, make_active=True)
 
         self.counter = 0
+        rr.log("pose", rr.Points3D(np.zeros(3)))
 
     def set_counter(self):
         rr.set_time_sequence("frame", self.counter)
@@ -107,3 +145,13 @@ class RerunVisualizer:
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
         rr.log(name, rr.Image(image))
+
+    def disparity_map(self, frame, name="disparity"):
+        image = disparity_map_to_image(frame)
+        rr.log(name, rr.Image(image))
+
+    def pose_trajectory(self, pose, name="pose"):
+        # https://rerun.io/docs/reference/types/archetypes/transform3d
+        # NOTE: https://github.com/rerun-io/cpp-example-ros-bridge/blob/c65e24b8f85b05812df7288b79440658a96a7fcc/rerun_bridge/src/rerun_bridge/rerun_ros_interface.cpp#L69
+        axis_angle, translation = pose
+        rr.log(name, rr.Transform3D(rotation=axis_angle, translation=translation))

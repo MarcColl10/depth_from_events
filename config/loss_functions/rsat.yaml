@@ -3,4 +3,5 @@ rsat:
   use_events: ${....datamodule.return_events}
   accumulation_window: 10
   base: ${.accumulation_window}
+  keep_warping: true  # base == accumulation_window so doesn't matter
   select: null  # everything

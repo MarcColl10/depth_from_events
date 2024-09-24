@@ -11,14 +11,14 @@ class FlowNetwork(nn.Module):
 
     modality = "flow"
 
-    def __init__(self, encoder_channels, memory_channels, decoder_channels, scaling):
+    def __init__(self, encoder_channels, memory_channels, decoder_channels, activation_fn, final_bias, scaling):
         super().__init__()
 
         self.scaling = scaling
 
-        self.encoder = conv_encoder(encoder_channels)
+        self.encoder = conv_encoder(encoder_channels, activation_fn)
         self.memory = LazyConvGru(memory_channels, 3)
-        self.decoder = upsample_decoder(decoder_channels, mode=self.modality)
+        self.decoder = upsample_decoder(decoder_channels, activation_fn, final_bias, mode=self.modality)
 
     def forward(self, input, hidden=None):
         encoder = self.encoder(input[:, :2])  # only polarity channels
@@ -41,15 +41,15 @@ class DisparityPoseNetwork(nn.Module):
 
     modality = "disparity"
 
-    def __init__(self, encoder_channels, memory_channels, decoder_channels, scaling):
+    def __init__(self, encoder_channels, memory_channels, decoder_channels, final_bias, scaling):
         super().__init__()
 
         self.scaling = scaling
 
         self.encoder = conv_encoder(encoder_channels)
         self.memory = LazyConvGru(memory_channels, 3)
-        self.disp_decoder = upsample_decoder(decoder_channels, mode=self.modality)
-        self.pose_decoder = flatten_decoder(decoder_channels)
+        self.disp_decoder = upsample_decoder(decoder_channels, final_bias, mode=self.modality)
+        self.pose_decoder = flatten_decoder(decoder_channels, final_bias)
 
     def forward(self, input, hidden=None):
         encoder = self.encoder(input[:, :2])  # only polarity channels

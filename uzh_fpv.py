@@ -111,7 +111,7 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
                     "events/x", (0,), maxshape=(None,), chunks=True, dtype=np.uint16, compression=hdf5plugin.Zstd()
                 )
                 h5f.create_dataset(
-                    "events/p", (0,), maxshape=(None,), chunks=True, dtype=np.bool_, compression=hdf5plugin.Zstd()
+                    "events/p", (0,), maxshape=(None,), chunks=True, dtype=np.uint8, compression=hdf5plugin.Zstd()
                 )
 
                 # if rectifying, also store rectified coordinates
@@ -160,7 +160,7 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
                     t0, tk = h5f["events/t"][0], h5f["events/t"][-1]
                     t0 += t0_skip
                     n_full_windows = int((tk - t0) // time_window)
-                    t_split = np.linspace(t0, tk, n_full_windows + 1)
+                    t_split = np.linspace(t0, n_full_windows * time_window + t0, n_full_windows + 1)
                     splits = np.searchsorted(h5f["events/t"], t_split)
                 elif count_window is not None:
                     start = bisect_left(h5f["events/t"], h5f["events/t"][0] + t0_skip)
@@ -238,7 +238,7 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
                         t = h5f["events/t"][start:stop]  # float64
                         y = h5f["events/y"][start:stop]  # uint16
                         x = h5f["events/x"][start:stop]  # uint16
-                        p = h5f["events/p"][start:stop].astype(np.uint8)  # bool to uint8
+                        p = h5f["events/p"][start:stop]  # uint8 in {0, 1}
 
                         # discard if few events or same timestamp
                         if len(t) < 10 or t[-1] == t[0]:
@@ -279,7 +279,7 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
 
 if __name__ == "__main__":
     time_window = 0.01
-    subsample = 2
+    subsample = None
     ts_res = 0.25
     rectify = True
     root_dir = f"data/uzh_fpv_{int(time_window * 1000)}ms{'_subs' + str(subsample) if subsample is not None else ''}_{ts_res}ts{'_rect' if rectify else ''}"

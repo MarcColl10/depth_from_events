@@ -8,7 +8,6 @@ from dotmap import DotMap
 import h5py
 import hdf5plugin
 import numpy as np
-import pandas as pd
 from rich.progress import track
 from torchvision.datasets.utils import download_and_extract_archive, download_url
 import yaml
@@ -37,8 +36,8 @@ DSEC_TRAIN_RECORDINGS = [
 ]
 DSEC_VAL_RECORDINGS = [
     "thun_00_a",
-    # "zurich_city_01_a",
-    # "zurich_city_09_a",
+    "zurich_city_01_a",
+    "zurich_city_09_a",
 ]
 
 
@@ -251,14 +250,26 @@ def get_dsec_h5_frames(root_dir, download_dir, time_window, count_window, subsam
                     )
 
                 # process into frames
-                if time_window is not None:
+                if time_window is not None and count_window is not None:  # hybrid windows (time with count cap)
                     t0, tk = h5f["events/t"][0], h5f["events/t"][-1]
-                    n_full_windows = int((tk - t0) // time_window)
-                    t_split = np.linspace(t0, tk, n_full_windows + 1)
+                    splits = [0]
+                    t = t0
+                    i0 = 0
+                    while t < tk:
+                        i1 = bisect_left(h5f["events/t"], t + time_window)
+                        if i1 - i0 > count_window:
+                            t = h5f["events/t"][i0 + count_window]
+                            i0 += count_window
+                        else:
+                            t += time_window
+                            i0 = i1
+                        splits.append(i0)
+                elif time_window is not None:  # time windows
+                    t0, tk = h5f["events/t"][0], h5f["events/t"][-1]
+                    t_split = np.arange(t0, tk, time_window)  # arange fine because ints
                     splits = np.searchsorted(h5f["events/t"], t_split)
-                elif count_window is not None:
-                    start = bisect_left(h5f["events/t"], h5f["events/t"][0])
-                    splits = np.arange(start, len(h5f["events/t"]), count_window)
+                elif count_window is not None:  # count windows
+                    splits = np.arange(0, len(h5f["events/t"]), count_window)
 
                 # write splits to h5 so we can get corresponding raw events
                 frame_splits = np.stack([splits[:-1], splits[1:]], axis=1)
@@ -353,10 +364,9 @@ def get_dsec_h5_frames(root_dir, download_dir, time_window, count_window, subsam
 
                         frames.append(frame)
 
-                    # convert to uint8 and add to h5
+                    # convert to uint16 (uint8 not enough) and add to h5
                     frames = np.stack(frames)
-                    assert frames.min() >= 0 and frames.max() <= 255
-                    append(h5f["events/frames"], frames.astype(np.uint8))
+                    append(h5f["events/frames"], frames.astype(np.uint16))
 
                 # overwrite raw coords with rectified
                 if rectify:
@@ -386,15 +396,18 @@ def get_dsec_h5_frames(root_dir, download_dir, time_window, count_window, subsam
 
 if __name__ == "__main__":
     time_window = 10000
-    subsample = 2
+    count_window = 100000
+    time_window_str = f"{int(time_window / 1000)}ms" if time_window is not None else ""
+    count_window_str = f"{count_window}c" if count_window is not None else ""
+    subsample = None
     ts_res = 0.25
     rectify = True
-    root_dir = f"data/dsec_{int(time_window / 1000)}ms{'_subs' + str(subsample) if subsample is not None else ''}_{ts_res}ts{'_rect' if rectify else ''}"
+    root_dir = f"data/dsec_{time_window_str}{count_window_str}{'_subs' + str(subsample) if subsample is not None else ''}_{ts_res}ts{'_rect' if rectify else ''}"
     get_dsec_h5_frames(
         root_dir,
         download_dir="data/raw/dsec",
         time_window=time_window,
-        count_window=None,
+        count_window=count_window,
         subsample=subsample,
         ts_res=ts_res,
         rectify=rectify,

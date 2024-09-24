@@ -1,0 +1,6 @@
+_target_: office_flights.FlightDataModule
+root_dir: data/raw/office_flights
+time_window: 10000  # 10ms in us
+subsample: null  # filters recordings based on their subsampling; null = full image
+return_events: true  # always
+num_workers: 8

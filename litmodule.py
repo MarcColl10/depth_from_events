@@ -27,7 +27,12 @@ class Train(LightningModule):
             self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
 
         # set visualization
-        self.visualizing = any([isinstance(cb, callbacks.LiveVisualizer) for cb in self.trainer.callbacks])
+        self.visualizing = any(
+            [
+                isinstance(cb, (callbacks.LiveVisualizer, callbacks.ValidationVideoLogger))
+                for cb in self.trainer.callbacks
+            ]
+        )
 
     def shared_step(self, batch, batch_idx, stage):
         # training: get optimizer because manual optimization
@@ -89,7 +94,6 @@ class Train(LightningModule):
             if self.visualizing:
                 log.frame += [x]
                 log.flow += [yhat]
-                log.counter += 1
 
             # reset if end of sequence
             if any(eof):

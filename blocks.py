@@ -74,7 +74,7 @@ def named_residual(prefix, *args):
     return Residual(modules)
 
 
-def res_block(out_channels, kernel_size, stride=1):
+def res_block(out_channels, kernel_size, activation_fn, stride=1):
     padding = kernel_size // 2
     if stride != 1:
         downsample = feedforward(
@@ -87,14 +87,14 @@ def res_block(out_channels, kernel_size, stride=1):
         "res",
         feedforward(
             nn.LazyConv2d(out_channels, kernel_size, stride=stride, padding=padding),
-            nn.ELU(),
+            activation_fn(),
         ),
         feedforward(
             nn.LazyConv2d(out_channels, kernel_size, padding=padding),
             nn.Identity(),
         ),
         downsample,
-        nn.ELU(),
+        activation_fn(),
     )
     return block
 
@@ -119,7 +119,7 @@ class LazyPadder(nn.Module):
         return F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
 
 
-def conv_encoder(out_channels):
+def conv_encoder(out_channels, activation_fn):
     """
     Components:
     - Padding to size divisible by 8
@@ -129,19 +129,19 @@ def conv_encoder(out_channels):
     padder = LazyPadder(8)
     head = feedforward(
         nn.LazyConv2d(out_channels // 2, 7, stride=2, padding=3),
-        nn.ELU(),
+        activation_fn(),
     )
     encoder = named_sequential(
         "conv",
-        res_block(out_channels // 2, 3, stride=2),
-        res_block(out_channels // 2, 3),
-        res_block(out_channels, 3, stride=2),
-        res_block(out_channels, 3),
+        res_block(out_channels // 2, 3, activation_fn, stride=2),
+        res_block(out_channels // 2, 3, activation_fn),
+        res_block(out_channels, 3, activation_fn, stride=2),
+        res_block(out_channels, 3, activation_fn),
     )
     return named_sequential("enc", padder, head, encoder)
 
 
-def upsample_decoder(out_channels, mode="flow"):
+def upsample_decoder(out_channels, activation_fn, final_bias, mode="flow"):
     """
     Select between flow (2-channel, identity)
     and disparity (1-channel, sigmoid) decoder.
@@ -152,10 +152,10 @@ def upsample_decoder(out_channels, mode="flow"):
         "dec",
         feedforward(
             nn.LazyConv2d(out_channels, 3, padding=1),
-            nn.ELU(),
+            activation_fn(),
         ),
         feedforward(
-            nn.LazyConv2d(final_channels, 3, padding=1, bias=False),
+            nn.LazyConv2d(final_channels, 3, padding=1, bias=final_bias),
             final_activation,
         ),
         nn.Upsample(scale_factor=8, mode="bilinear", align_corners=False),
@@ -163,19 +163,19 @@ def upsample_decoder(out_channels, mode="flow"):
     return decoder
 
 
-def flatten_decoder(out_channels):
+def flatten_decoder(out_channels, activation_fn, final_bias):
     decoder = named_sequential(
         "dec",
         feedforward(
             nn.LazyConv2d(out_channels, 3, stride=2, padding=1),
-            nn.ELU(),
+            activation_fn(),
         ),
         feedforward(
             nn.LazyConv2d(out_channels, 3, stride=2, padding=1),
-            nn.ELU(),
+            activation_fn(),
         ),
         feedforward(
-            nn.LazyConv2d(6, 3, padding=1, bias=False),
+            nn.LazyConv2d(6, 3, padding=1, bias=final_bias),
             nn.Identity(),
         ),
         nn.AdaptiveAvgPool2d((1, 1)),

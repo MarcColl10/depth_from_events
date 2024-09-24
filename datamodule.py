@@ -123,7 +123,7 @@ class FrameSequence:
                 splits = splits[::-1]
             for start, stop in splits:
                 # get slice
-                t = self.h5["events/t"][start:stop]  # float64
+                t = self.h5["events/t"][start:stop].astype(np.float64)  # float64
                 y = self.h5["events/y"][start:stop]  # uint16 or float32
                 x = self.h5["events/x"][start:stop]  # uint16 or float32
                 p = self.h5["events/p"][start:stop].astype(np.float32)  # bool to float32
@@ -287,17 +287,17 @@ if __name__ == "__main__":
         shuffle=True,
         num_workers=8,
     )
-    # datamodule = DsecDataModule(
-    #     root_dir="data/dsec_10ms_rect",
-    #     train_seq_len=100,
-    #     train_crop=None,
-    #     val_crop=None,
-    #     augmentations=["flip_t", "flip_pol", "flip_ud", "flip_lr"],
-    #     return_events=False,
-    #     batch_size=8,
-    #     shuffle=True,
-    #     num_workers=4,
-    # )
+    datamodule = DsecDataModule(
+        root_dir="data/dsec_10ms_0.25ts_rect",
+        train_seq_len=100,
+        train_crop=(128, 128),
+        val_crop=None,
+        augmentations=["flip_t", "flip_pol", "flip_ud", "flip_lr"],
+        return_events=True,
+        batch_size=8,
+        shuffle=True,
+        num_workers=8,
+    )
     datamodule.prepare_data()
     datamodule.setup("fit")
     dataloader = datamodule.train_dataloader()
