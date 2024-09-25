@@ -5,5 +5,5 @@ decoder_channels: 96
 activation_fn:
   _target_: torch.nn.ReLU
   _partial_: true
-final_bias: true
+final_bias: false
 scaling: 32
