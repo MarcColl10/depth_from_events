@@ -33,7 +33,7 @@ class FlightSequence:
 
         # get duration of recording
         # don't get full t because of memory usage
-        self.t0, self.tk = self.fs.data["events/t"][[0, -1]]  # us
+        self.t0, self.tk = self.h5["events/t"][[0, -1]]  # us
         self.rec_duration = self.tk - self.t0
 
         # slice dataset
@@ -166,9 +166,10 @@ class FlightDataModule(LightningDataModule):
             self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.recordings])
             self.val_frame_shape = (1, 2, *sequence(recording=self.recordings[0]).sensor_size)
 
-    def dataloader(self):
+    def dataloader(self, stage):
+        dataset = self.train_dataset if stage == "train" else self.val_dataset
         return DataLoader(
-            self.train_dataset,
+            dataset,
             batch_size=None,
             shuffle=False,
             num_workers=self.num_workers,
@@ -176,10 +177,10 @@ class FlightDataModule(LightningDataModule):
         )
 
     def train_dataloader(self):
-        return self.dataloader()
+        return self.dataloader("train")
 
     def val_dataloader(self):
-        return self.dataloader()
+        return self.dataloader("validate")
 
 
 if __name__ == "__main__":
