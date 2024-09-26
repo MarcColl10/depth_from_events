@@ -42,7 +42,7 @@ class LiveVisualizer(Callback):
 
 
 # TODO: WIP
-class ValidationVideoLogger(Callback):
+class VideoLogger(Callback):
     def __init__(self, recording, range):
         self.recording = recording
         self.range = range

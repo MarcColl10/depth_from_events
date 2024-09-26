@@ -1,4 +1,4 @@
-val_video:
-  _target_: callbacks.ValidationVideoLogger
+video:
+  _target_: callbacks.VideoLogger
   recording: thun_00_a
   range: [160, 180]
