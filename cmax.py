@@ -74,6 +74,39 @@ class ContrastMaximization(nn.Module):
         loss = loss / inside
         return loss
 
+    def get_accumulated_events(self):
+        if not self.use_events:
+            accumulated_event_frame = torch.stack(self.event_frames, dim=2).sum(2)
+            return accumulated_event_frame
+        else:
+            counts = [aux.counts for aux in self.auxs]
+            events = [aux.events for aux in self.auxs]
+            accumulated_events = format_events(events, counts, stack=True)  # padded (b, n, d, 5)
+            accumulated_events[..., 2] = accumulated_events[..., 2].floor()  # prevent trilinear splat
+            if not accumulated_events.numel():
+                return torch.zeros_like(self.event_frames[0])
+            _, _, h, w = self.event_frames[0].shape
+            accumulated_event_frame, _ = build_iwe(accumulated_events, 1, None, (h, w))  # (b, 2, d, h, w)
+            return accumulated_event_frame.sum(2)
+
+    def get_accumulated_flow(self, tref):
+        # TODO: use extract_events?
+        pass
+
+    def compute_iwe(self, tref):
+        # get events and flow maps
+        events, flow_maps = self.prepare_backward()
+        if not events.numel():
+            return torch.zeros_like(self.event_frames[0])
+
+        # warp events: (b, n, 5) -> (b, n, d + 1, 5) with (x, y, t, t_orig, p)
+        warped_events = iterative_3d_warp_cuda(events, flow_maps, self.base, self.keep_warping)
+
+        # build iwe and iwt with (trilinear) splatting
+        _, _, h, w, _ = flow_maps.shape
+        iwe, _ = build_iwe(warped_events, self.base, self.select, (h, w))  # (b, 2, d + 1, h, w)
+        return iwe[:, :, tref]
+
     def backward(self):
         raise NotImplementedError
 

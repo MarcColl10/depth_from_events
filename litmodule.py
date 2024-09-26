@@ -45,24 +45,45 @@ class Train(LightningModule):
 
         # go over sequence
         log = DotMap()
-        for i, (x, eof) in enumerate(zip(frames, eofs)):
-            # get auxiliary
+        for i, (frame, eof) in enumerate(zip(frames, eofs)):
+            # get auxiliary: events and counts
             aux = DotMap({k: v[i] for k, v in auxs.items()})
 
             # forward network
-            yhat = self.network(x)
+            # if flow net, this is flow; else (disparity, pose)
+            yhat = self.network(frame)
 
             # transform network output
             if self.transform is not None:
-                yhat = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
+                disparity, pose = yhat
+                flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
+            else:
+                disparity, pose = None, None
+                flow = yhat
 
             # log model prediction
-            self.log(f"{stage}/yhat_abs_mean", yhat.abs().mean(), batch_size=1)
+            self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1)
+
+            # add to log if visualizing
+            if self.visualizing:
+                log.events += [frame]
+                log.flow += [flow]
+                if self.transform is not None:
+                    log.disparity += [disparity]
+                    log.pose += [pose]
 
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():
                 # forward
-                loss_fn(x, aux, yhat)
+                loss_fn(frame, aux, flow)
+
+                # add to log if visualizing
+                if self.visualizing:
+                    log[f"{name}_accumulated_events"] += [loss_fn.get_accumulated_events()]
+                    log[f"{name}_image_warped_events_0"] += [loss_fn.compute_iwe(0)]
+                    log[f"{name}_image_warped_events_t"] += [loss_fn.compute_iwe(loss_fn.passes)]
+                    # log[f"{name}_accumulated_flow_fw"] += [loss_fn.get_accumulated_flow(loss_fn.passes)]
+                    # log[f"{name}_accumulated_flow_bw"] += [loss_fn.get_accumulated_flow(0)]
 
                 # backward if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
@@ -90,11 +111,6 @@ class Train(LightningModule):
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
                             self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
 
-            # add to log if visualizing
-            if self.visualizing:
-                log.frame += [x]
-                log.flow += [yhat]
-
             # reset if end of sequence
             if any(eof):
                 self.network.reset()
@@ -118,7 +134,7 @@ class Train(LightningModule):
         if self.scheduler is None:
             return optimizer
         else:
-            dl_len = len(self.trainer.datamodule.train_dataloader())  # TODO: does this affect dl?
+            dl_len = len(self.trainer.datamodule.train_dataloader())  # don't think this affects dl
             steps_per_seq = (
                 self.trainer.datamodule.train_seq_len / self.loss_functions["train"]["cmax"].accumulation_window
             )

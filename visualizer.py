@@ -4,6 +4,8 @@ import numpy as np
 import rerun as rr
 import rerun.blueprint as rrb
 
+from data_utils import batched
+
 
 def event_frame_to_image(frame, pol_channels=[0, 1]):
     """
@@ -118,21 +120,22 @@ class RerunVisualizer:
     """
 
     def __init__(self, app_id, server, web):
-
-        blueprint = rrb.Blueprint(
-            rrb.Horizontal(
-                rrb.Spatial2DView(name="events", origin="events"),
-                rrb.Spatial2DView(name="flow", origin="flow"),
-                rrb.Spatial2DView(name="disparity", origin="disparity"),
-                rrb.Spatial3DView(name="pose", origin="pose"),
-            )
-        )
         rr.init(app_id)
         rr.serve() if web else rr.connect(server)
-        rr.send_blueprint(blueprint, make_active=True)
 
         self.counter = 0
         rr.log("pose", rr.Points3D(np.zeros(3)))
+
+    def update_blueprint(self, quantities):
+        if not hasattr(self, "blueprint"):
+            # make views
+            views = [rrb.Spatial2DView(name=q, origin=q) for q in quantities if q != "pose"]  # 2d
+            views.append(rrb.Spatial3DView(name="pose", origin="pose")) if "pose" in quantities else None  # 3d
+
+            # make into rows, then stack into blueprint and send it
+            rows = batched(views, 3)
+            self.blueprint = rrb.Blueprint(rrb.Vertical(*[rrb.Horizontal(*row) for row in rows]))
+            rr.send_blueprint(self.blueprint, make_active=True)
 
     def set_counter(self):
         rr.set_time_sequence("frame", self.counter)

@@ -1,3 +1,4 @@
+from dotmap import DotMap
 from lightning.pytorch.callbacks import Callback
 import numpy as np
 
@@ -9,10 +10,29 @@ class LiveVisualizer(Callback):
         self.visualizer = RerunVisualizer(app_id, server, web)
 
     def on_batch_end(self, outputs):
-        for events, flow in zip(outputs.frame, outputs.flow):
+        # update blueprint
+        self.visualizer.update_blueprint(outputs.keys())
+
+        # transpose dict of lists to list of dicts so we can iterate
+        outputs = [DotMap(zip(outputs, col)) for col in zip(*outputs.values())]
+        for output in outputs:
             self.visualizer.set_counter()
-            self.visualizer.event_frame(events[0].cpu())
-            self.visualizer.flow_map(flow[0].detach().cpu())
+
+            # things with events
+            for k in [k for k in output.keys() if "events" in k]:
+                self.visualizer.event_frame(output[k][0].cpu(), name=k)
+
+            # things with flow
+            for k in [k for k in output.keys() if "flow" in k]:
+                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+
+            # things with disparity
+            for k in [k for k in output.keys() if "disparity" in k]:
+                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+
+            # things with pose
+            for k in [k for k in output.keys() if "pose" in k]:
+                self.visualizer.pose_trajectory(output[k][0].detach().cpu(), name=k)
 
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)

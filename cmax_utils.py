@@ -32,16 +32,19 @@ def extract_events_from_frames(frames):
     return output
 
 
-def format_events(events, counts):
+def format_events(events, counts, stack=False):
     """
     Go from list of padded (b, n, 4) events with (t, y, x, p)
-    to padded (b, n, 5) events with (x, y, t, pass, p).
+    to padded (b, n, 5) events with (x, y, t, pass, p)
+    or (b, n, d, 5) if stack is true.
     """
     max_counts = [c.max() for c in counts]  # per batch
+    if stack:
+        max_counts = [max(max_counts)] * len(max_counts)  # overall
     output = []
     for i, (ev, c) in enumerate(zip(events, max_counts)):
         t, y, x, p = ev[:, :c].unbind(-1)
         z = torch.ones_like(t) * i
         output.append(torch.stack([x, y, t + i, z, p], dim=-1))
-    output = torch.cat(output, dim=1)
+    output = torch.cat(output, dim=1) if not stack else torch.stack(output, dim=2)
     return output
