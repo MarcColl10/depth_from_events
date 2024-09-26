@@ -66,6 +66,11 @@ class FlightSequence:
             x = self.h5["events/x"][start:end]  # uint16
             p = self.h5["events/p"][start:end]  # uint8 in {0, 1}
 
+            # subsample
+            if self.subsample is not None:
+                y //= self.subsample
+                x //= self.subsample
+
             # list of events to structured array
             dtype = np.dtype([("t", np.float64), ("y", np.float32), ("x", np.float32), ("p", np.int8)])
             lst = np.empty(len(t), dtype=dtype)
@@ -79,9 +84,6 @@ class FlightSequence:
             y = torch.from_numpy(y.astype(np.int64))
             x = torch.from_numpy(x.astype(np.int64))
             p = torch.from_numpy(p.astype(np.int64))
-            if self.subsample is not None:
-                y //= self.subsample
-                x //= self.subsample
             frame = torch.zeros(2, *self.sensor_size, dtype=torch.int64)  # torch is faster
             frame.index_put_((p, y, x), torch.ones_like(p), accumulate=True)
 
