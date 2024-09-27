@@ -3,6 +3,7 @@ dotmap
 git+ssh://git@github.com/Huizerd/cuda_3d_ops
 h5py
 hdf5plugin
+hydra-core
 lightning==2.3.*
 matplotlib
 moviepy
@@ -12,4 +13,6 @@ pandas
 pre-commit
 rerun-sdk
 rich
+setuptools
 wandb
+wheel
