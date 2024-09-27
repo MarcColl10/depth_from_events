@@ -1,0 +1,15 @@
+# everything from env.yaml except torch, torchvision, cuda
+dotmap
+git+ssh://git@github.com/Huizerd/cuda_3d_ops
+h5py
+hdf5plugin
+lightning==2.3.*
+matplotlib
+moviepy
+numpy
+opencv-python
+pandas
+pre-commit
+rerun-sdk
+rich
+wandb
