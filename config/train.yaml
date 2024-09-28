@@ -1,5 +1,5 @@
 defaults:
-  - datamodule: dsec
+  - datamodule: office_flights
   - litmodule: train
   - network: flow
   - transform: nothing

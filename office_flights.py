@@ -132,6 +132,7 @@ class FlightDataModule(LightningDataModule):
         self,
         root_dir,
         time_window,
+        chunk_size,
         subsample,
         return_events,
         num_workers,
@@ -140,6 +141,7 @@ class FlightDataModule(LightningDataModule):
 
         self.root_dir = Path(root_dir)
         self.time_window = time_window
+        self.chunk_size = chunk_size
         self.subsample = subsample
         self.return_events = return_events
         self.num_workers = num_workers
@@ -159,6 +161,7 @@ class FlightDataModule(LightningDataModule):
             FlightSequence,
             root_dir=self.root_dir,
             time_window=self.time_window,
+            chunk_size=self.chunk_size,
             subsample=self.subsample,
         )
         if stage == "fit":

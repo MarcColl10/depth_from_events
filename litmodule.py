@@ -29,7 +29,7 @@ class Train(LightningModule):
         # set visualization
         self.visualizing = any(
             [
-                isinstance(cb, (callbacks.LiveVisualizer, callbacks.ValidationVideoLogger))
+                isinstance(cb, (callbacks.LiveVisualizer, callbacks.VideoLogger))
                 for cb in self.trainer.callbacks
             ]
         )
