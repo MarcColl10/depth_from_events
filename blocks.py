@@ -163,7 +163,9 @@ def upsample_decoder(out_channels, activation_fn, final_bias, mode="flow"):
     return decoder
 
 
-def flatten_decoder(out_channels, activation_fn, final_bias):
+def flatten_decoder(out_channels, activation_fn, final_bias, mode="pose"):
+    final_channels = 6 if mode == "pose" else 4
+    final_activation = nn.Identity() if mode == "pose" else nn.Sigmoid()
     decoder = named_sequential(
         "dec",
         feedforward(
@@ -175,8 +177,8 @@ def flatten_decoder(out_channels, activation_fn, final_bias):
             activation_fn(),
         ),
         feedforward(
-            nn.LazyConv2d(6, 3, padding=1, bias=final_bias),
-            nn.Identity(),
+            nn.LazyConv2d(final_channels, 3, padding=1, bias=final_bias),
+            final_activation,
         ),
         nn.AdaptiveAvgPool2d((1, 1)),
         nn.Flatten(start_dim=1),

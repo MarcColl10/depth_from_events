@@ -31,6 +31,14 @@ class FlightSequence:
         # open large h5 files only once
         self.h5 = h5py.File(self.root_dir / f"{self.recording}.h5", "r")
 
+        # intrinsic matrix (fake)
+        h, w = self.sensor_size
+        fx, fy, cx, cy = [(h + w) / 2, (h + w) / 2, w / 2, h / 2]
+        if self.subsample is not None:
+            fx, fy, cx, cy = [v / self.subsample for v in [fx, fy, cx, cy]]
+        self.K_rect = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
+        self.inv_K_rect = np.linalg.inv(self.K_rect)
+
         # get duration of recording
         # don't get full t because of memory usage
         self.t0, self.tk = self.h5["events/t"][[0, -1]]  # us
@@ -116,6 +124,8 @@ class FlightSequence:
         events = torch.from_numpy(events)
         counts = torch.from_numpy(counts)
         auxs = DotMap(events=events, counts=counts)
+        K_rect = torch.from_numpy(self.K_rect)
+        inv_K_rect = torch.from_numpy(self.inv_K_rect)
 
         # return dotmap
         sample = DotMap()
@@ -123,6 +133,8 @@ class FlightSequence:
         sample.auxs = auxs
         sample.recording = self.recording
         sample.eofs = [i == len(self.t_start) - 1 for i in chunk]
+        sample.K_rect = K_rect
+        sample.inv_K_rect = inv_K_rect
 
         return sample
 

@@ -28,10 +28,7 @@ class Train(LightningModule):
 
         # set visualization
         self.visualizing = any(
-            [
-                isinstance(cb, (callbacks.LiveVisualizer, callbacks.VideoLogger))
-                for cb in self.trainer.callbacks
-            ]
+            [isinstance(cb, (callbacks.LiveVisualizer, callbacks.VideoLogger)) for cb in self.trainer.callbacks]
         )
 
     def shared_step(self, batch, batch_idx, stage):
@@ -55,7 +52,10 @@ class Train(LightningModule):
 
             # transform network output
             if self.transform is not None:
-                disparity, pose = yhat
+                if len(yhat) == 2:
+                    disparity, pose = yhat
+                elif len(yhat) == 3:
+                    disparity, pose, _ = yhat
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
             else:
                 disparity, pose = None, None

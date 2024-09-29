@@ -17,7 +17,18 @@ class DisparityToFlow(nn.Module):
 
     def forward(self, prediction, K_rect, inv_K_rect):
         # unpack
-        disparity, pose = prediction
+        if len(prediction) == 2:
+            disparity, pose = prediction
+        elif len(prediction) == 3:
+            disparity, pose, intrinsics = prediction
+            fx_factor, fy_factor, cx_factor, cy_factor = intrinsics.unbind(-1)
+            b, _, h, w = disparity.shape
+            K_rect = torch.zeros(b, 3, 3, device=disparity.device, dtype=disparity.dtype)
+            K_rect[:, 0, 0] = fx_factor * 0.5 * (h + w)
+            K_rect[:, 1, 1] = fy_factor * 0.5 * (h + w)
+            K_rect[:, 0, 2] = cx_factor * w
+            K_rect[:, 1, 2] = cy_factor * h
+            inv_K_rect = torch.linalg.pinv(K_rect)
 
         # split pose into axis-angle representation and translation
         axis_angle, translation = pose.split([3, 3], dim=-1)
