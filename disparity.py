@@ -7,6 +7,12 @@ import torch.nn as nn
 
 
 class DisparityToFlow(nn.Module):
+    """
+    Convert disparity and pose to flow, optionally with learned intrinsics.
+
+    Intrinsic matrix representation based on
+    https://github.com/google-research/google-research/blob/master/depth_and_motion_learning/intrinsics_utils.py.
+    """
 
     def __init__(self, min_depth, max_depth):
         super().__init__()
@@ -24,10 +30,11 @@ class DisparityToFlow(nn.Module):
             fx_factor, fy_factor, cx_factor, cy_factor = intrinsics.unbind(-1)
             b, _, h, w = disparity.shape
             K_rect = torch.zeros(b, 3, 3, device=disparity.device, dtype=disparity.dtype)
-            K_rect[:, 0, 0] = fx_factor * 0.5 * (h + w)
-            K_rect[:, 1, 1] = fy_factor * 0.5 * (h + w)
+            K_rect[:, 0, 0] = fx_factor * (h + w)  # this and fy had 0.5 in it, but sigmoid now
+            K_rect[:, 1, 1] = fy_factor * (h + w)
             K_rect[:, 0, 2] = cx_factor * w
             K_rect[:, 1, 2] = cy_factor * h
+            K_rect[:, 2, 2] = 1
             inv_K_rect = torch.linalg.pinv(K_rect)
 
         # split pose into axis-angle representation and translation

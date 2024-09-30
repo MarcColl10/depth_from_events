@@ -26,7 +26,7 @@ class FlightSequence:
     def __post_init__(self):
         # defaults
         self.root_dir = Path(self.root_dir)
-        self.sensor_size = (480, 640) if self.subsample is None else (480 // self.subsample, 640 // self.subsample)
+        self.sensor_size = (480, 640)
 
         # open large h5 files only once
         self.h5 = h5py.File(self.root_dir / f"{self.recording}.h5", "r")
@@ -35,6 +35,7 @@ class FlightSequence:
         h, w = self.sensor_size
         fx, fy, cx, cy = [(h + w) / 2, (h + w) / 2, w / 2, h / 2]
         if self.subsample is not None:
+            self.sensor_size = (h // self.subsample, w // self.subsample)
             fx, fy, cx, cy = [v / self.subsample for v in [fx, fy, cx, cy]]
         self.K_rect = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
         self.inv_K_rect = np.linalg.inv(self.K_rect)
