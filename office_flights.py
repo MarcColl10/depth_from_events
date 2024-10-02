@@ -22,6 +22,7 @@ class FlightSequence:
     time_window: int  # us
     chunk_size: int = 100
     subsample: int | None = None
+    dtype: torch.dtype = torch.float32
 
     def __post_init__(self):
         # defaults
@@ -120,17 +121,18 @@ class FlightSequence:
         frames = torch.stack(frames)
         counts = np.array(counts)
 
-        # convert to torch
+        # convert to torch and correct type
+        frames = frames.type(self.dtype)  # .to(memory_format=torch.channels_last)
         events = rfn.structured_to_unstructured(events, dtype=np.float32)
-        events = torch.from_numpy(events)
+        events = torch.from_numpy(events).type(self.dtype)
         counts = torch.from_numpy(counts)
         auxs = DotMap(events=events, counts=counts)
-        K_rect = torch.from_numpy(self.K_rect)
-        inv_K_rect = torch.from_numpy(self.inv_K_rect)
+        K_rect = torch.from_numpy(self.K_rect).type(self.dtype)
+        inv_K_rect = torch.from_numpy(self.inv_K_rect).type(self.dtype)
 
         # return dotmap
         sample = DotMap()
-        sample.frames = frames.float()
+        sample.frames = frames
         sample.auxs = auxs
         sample.recording = self.recording
         sample.eofs = [i == len(self.t_start) - 1 for i in chunk]
@@ -147,6 +149,7 @@ class FlightDataModule(LightningDataModule):
         time_window,
         chunk_size,
         subsample,
+        precision,
         return_events,
         num_workers,
     ):
@@ -156,6 +159,7 @@ class FlightDataModule(LightningDataModule):
         self.time_window = time_window
         self.chunk_size = chunk_size
         self.subsample = subsample
+        self.precision = precision
         self.return_events = return_events
         self.num_workers = num_workers
 
@@ -169,6 +173,16 @@ class FlightDataModule(LightningDataModule):
         ]
         self.recordings = [r for r, s in recordings if s == self.subsample]
 
+        # set precision
+        if str(self.precision) == "32":
+            self.dtype = torch.float32
+        elif str(self.precision) in ["16", "half"]:
+            self.dtype = torch.float16
+        elif str(self.precision) in ["bf16", "bf16-mixed"]:
+            self.dtype = torch.bfloat16
+        else:
+            raise ValueError(f"Unknown precision {self.precision}")
+
     def setup(self, stage):
         sequence = partial(
             FlightSequence,
@@ -176,6 +190,7 @@ class FlightDataModule(LightningDataModule):
             time_window=self.time_window,
             chunk_size=self.chunk_size,
             subsample=self.subsample,
+            dtype=self.dtype,
         )
         if stage == "fit":
             self.train_dataset = ConcatDataset([sequence(recording=rec) for rec in self.recordings])

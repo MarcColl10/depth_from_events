@@ -26,6 +26,9 @@ class Train(LightningModule):
         if self.logger is not None:
             self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
 
+        # convert to channels last
+        # self.network.to(memory_format=torch.channels_last)
+
         # set visualization
         self.visualizing = any(
             [isinstance(cb, (callbacks.LiveVisualizer, callbacks.VideoLogger)) for cb in self.trainer.callbacks]
@@ -110,6 +113,9 @@ class Train(LightningModule):
                         elif stage == "validate" and value:
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
                             self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
+
+                # else:
+                #     self.network.detach()
 
             # reset if end of sequence
             if any(eof):

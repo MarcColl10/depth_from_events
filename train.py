@@ -4,6 +4,13 @@ from lightning import seed_everything
 from omegaconf import OmegaConf
 
 
+# NOTE: no difference with this on 4090, but set to prevent warning?
+# sets torch.backends.cuda.matmul.allow_tf32 to true (matmuls)
+# toch.backends.cudnn.allow_tf32 is already true (convs)
+# torch.set_float32_matmul_precision("high")
+# torch.backends.cudnn.benchmark = True
+
+
 @hydra.main(version_base=None, config_path="config", config_name="train")
 def main(config):
     # reproducibility
