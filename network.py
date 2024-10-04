@@ -37,15 +37,21 @@ class DisparityPoseNetwork(nn.Module):
     Disparity and pose prediction network following ID-Net.
     """
 
-    def __init__(self, encoder_channels, memory_channels, decoder_channels, activation_fn, final_bias, scaling):
+    def __init__(
+        self, encoder_channels, memory_channels, decoder_channels, activation_fn, final_bias, padding_mode, scaling
+    ):
         super().__init__()
 
         self.scaling = scaling
 
-        self.encoder = conv_encoder(encoder_channels, activation_fn)
+        self.encoder = conv_encoder(encoder_channels, activation_fn, padding_mode=padding_mode)
         self.memory = LazyConvGru(memory_channels, 3)
-        self.disp_decoder = upsample_decoder(decoder_channels, activation_fn, final_bias, mode="disparity")
-        self.pose_decoder = flatten_decoder(decoder_channels, activation_fn, final_bias, mode="pose")
+        self.disp_decoder = upsample_decoder(
+            decoder_channels, activation_fn, final_bias, padding_mode=padding_mode, mode="disparity"
+        )
+        self.pose_decoder = flatten_decoder(
+            decoder_channels, activation_fn, final_bias, padding_mode=padding_mode, mode="pose"
+        )
 
     def forward(self, input, hidden=None):
         encoder = self.encoder(input[:, :2])  # only polarity channels

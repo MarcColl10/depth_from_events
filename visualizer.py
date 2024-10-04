@@ -5,6 +5,7 @@ import rerun as rr
 import rerun.blueprint as rrb
 
 from data_utils import batched
+from disparity import DisparityToFlow
 
 
 def event_frame_to_image(frame, pol_channels=[0, 1]):
@@ -124,7 +125,9 @@ class RerunVisualizer:
         rr.serve() if web else rr.connect(server)
 
         self.counter = 0
-        rr.log("pose", rr.Points3D(np.zeros(3)))
+        self.pose = (np.eye(3), np.zeros(3))
+        self.linestrips = [np.zeros(3)]
+        rr.log("pose", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
 
     def update_blueprint(self, quantities):
         if not hasattr(self, "blueprint"):
@@ -156,5 +159,13 @@ class RerunVisualizer:
     def pose_trajectory(self, pose, name="pose"):
         # https://rerun.io/docs/reference/types/archetypes/transform3d
         # NOTE: https://github.com/rerun-io/cpp-example-ros-bridge/blob/c65e24b8f85b05812df7288b79440658a96a7fcc/rerun_bridge/src/rerun_bridge/rerun_ros_interface.cpp#L69
-        axis_angle, translation = pose
-        rr.log(name, rr.Transform3D(rotation=axis_angle, translation=translation))
+        axis_angle, translation = pose.split([3, 3], dim=-1)
+        rotation = DisparityToFlow.rodrigues(axis_angle.unsqueeze(0)).squeeze(0).numpy()
+        translation = translation.numpy()
+
+        orientation, origin = self.pose
+        orientation = rotation @ orientation
+        destination = origin + orientation @ translation
+        self.pose = (orientation, destination)
+        self.linestrips.append(destination)
+        rr.log(name, rr.LineStrips3D(np.stack(self.linestrips), radii=0.001))

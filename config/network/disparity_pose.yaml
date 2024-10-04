@@ -1,9 +1,10 @@
 _target_: network.WrappedDisparityPoseNetwork
 encoder_channels: 64
-memory_channels: 96
-decoder_channels: 96
+memory_channels: 64
+decoder_channels: 64
 activation_fn:
-  _target_: torch.nn.ReLU
+  _target_: torch.nn.ELU
   _partial_: true 
-final_bias: true
+final_bias: false
+padding_mode: reflect
 scaling: [1, 0.01]  # disparity, pose

@@ -13,13 +13,14 @@ class ContrastMaximization(nn.Module):
 
     cls_name = None
 
-    def __init__(self, use_events, accumulation_window, base, keep_warping, select):
+    def __init__(self, use_events, accumulation_window, base, keep_warping, bp_frac, select):
         super().__init__()
 
         self.use_events = use_events
         self.accumulation_window = accumulation_window
         self.base = base
         self.keep_warping = keep_warping
+        self.bp_frac = bp_frac
         self.select = select
 
         self.total_loss = 0
@@ -29,7 +30,7 @@ class ContrastMaximization(nn.Module):
         self.flow_maps = []
 
     def forward(self, event_frame, aux, flow_map):
-        self.event_frames.append(event_frame)
+        self.event_frames.append(event_frame[:, :4] if not self.use_events else event_frame[:, :2])
         self.auxs.append(aux)
         self.flow_maps.append(flow_map)
         self.passes += 1
@@ -52,7 +53,7 @@ class ContrastMaximization(nn.Module):
 
     def compute_cmax_loss(self, events, flow_maps):
         # warp events: (b, n, 5) -> (b, n, d + 1, 5) with (x, y, t, t_orig, p)
-        warped_events = iterative_3d_warp_cuda(events, flow_maps, self.base, self.keep_warping)
+        warped_events = iterative_3d_warp_cuda(events, flow_maps, self.base, self.keep_warping, self.bp_frac)
 
         # build iwe and iwt with (trilinear) splatting
         _, _, h, w, _ = flow_maps.shape
@@ -100,7 +101,7 @@ class ContrastMaximization(nn.Module):
             return torch.zeros_like(self.event_frames[0])
 
         # warp events: (b, n, 5) -> (b, n, d + 1, 5) with (x, y, t, t_orig, p)
-        warped_events = iterative_3d_warp_cuda(events, flow_maps, self.base, self.keep_warping)
+        warped_events = iterative_3d_warp_cuda(events, flow_maps, self.base, self.keep_warping, self.bp_frac)
 
         # build iwe and iwt with (trilinear) splatting
         _, _, h, w, _ = flow_maps.shape

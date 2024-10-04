@@ -1,10 +1,10 @@
 _target_: datamodule.UzhFpvDataModule
 root_dir: data/uzh_fpv_10ms_0.25ts_rect  # created with uzh_fpv.py
-train_seq_len: 100
-train_crop: [128, 128]  # hw for random, tlbr or null for fixed
+train_seq_len: null
+train_crop: [2, 1, 258, 345]  # hw for random, tlbr or null for fixed
 val_crop: [2, 1, 258, 345]  # gives centered (256, 344)
-augmentations: [flip_t, flip_pol, flip_ud, flip_lr]
-return_events: false  # whether to include raw events alongside frames
-batch_size: 8
-shuffle: true
+augmentations: null
+return_events: true  # whether to include raw events alongside frames
+batch_size: 1
+shuffle: false
 num_workers: 8
