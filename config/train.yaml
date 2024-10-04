@@ -1,5 +1,5 @@
 defaults:
-  - datamodule: office_flights
+  - datamodule: flights
   - litmodule: train
   - network: flow
   - transform: nothing

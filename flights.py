@@ -170,6 +170,10 @@ class FlightDataModule(LightningDataModule):
             ("rosbag2_2024-09-19-14-06-54_0", None),
             ("rosbag2_2024-09-19-14-09-21_0", 2),
             ("rosbag2_2024-09-19-14-12-10_0", 4),
+            # ("rosbag2_2024-10-03-19-45-14_0", 4),
+            # ("rosbag2_2024-10-03-19-55-33_0", 4),
+            # ("rosbag2_2024-10-03-20-48-17_0", 4),
+            # ("rosbag2_2024-10-03-20-56-06_0", 4),
         ]
         self.recordings = [r for r, s in recordings if s == self.subsample]
 
@@ -219,10 +223,14 @@ class FlightDataModule(LightningDataModule):
 if __name__ == "__main__":
     from visualizer import RerunVisualizer
 
-    visualizer = RerunVisualizer("office_flights")
-    # sequence_full = FlightSequence("data/raw/office_flights", "rosbag2_2024-09-19-14-06-54_0", 10000)
-    # sequence_half = FlightSequence("data/raw/office_flights", "rosbag2_2024-09-19-14-09-21_0", 10000)
-    sequence_quarter = FlightSequence("data/raw/office_flights", "rosbag2_2024-09-19-14-12-10_0", 10000)
+    visualizer = RerunVisualizer("flights", "100.74.49.39:9876", False)
+    # sequence_full = FlightSequence("data/raw/flights", "rosbag2_2024-09-19-14-06-54_0", 10000)
+    # sequence_half = FlightSequence("data/raw/flights", "rosbag2_2024-09-19-14-09-21_0", 10000)
+    sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-09-19-14-12-10_0", 10000, subsample=4)
+    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-19-45-14_0", 10000, subsample=4)
+    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-19-55-33_0", 10000, subsample=4)
+    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-20-48-17_0", 10000, subsample=4)
+    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-20-56-06_0", 10000, subsample=4)
 
     for chunk in sequence_quarter:
         for frame in chunk.frames:
