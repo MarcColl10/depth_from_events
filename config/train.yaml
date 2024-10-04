@@ -1,8 +1,8 @@
 defaults:
   - datamodule: flights
   - litmodule: train
-  - network: flow
-  - transform: nothing
+  - network: disparity_pose
+  - transform: disparity_to_flow
   - loss_functions@loss_functions.train:
     - cmax_iter
   - loss_functions@loss_functions.validate:
