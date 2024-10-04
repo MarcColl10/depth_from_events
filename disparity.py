@@ -21,6 +21,20 @@ class DisparityToFlow(nn.Module):
         self.max_depth = max_depth
         self.height, self.width = 0, 0
 
+    def init_grid(self, b, h, w, device, dtype):
+        self.height, self.width = h, w
+
+        # grid for pixel displacement computation
+        x = torch.arange(self.width, device=device, dtype=dtype)
+        y = torch.arange(self.height, device=device, dtype=dtype)
+        grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
+        self.grid = torch.stack([grid_x, grid_y]).unsqueeze(0).expand(b, -1, -1, -1)
+
+        # pixel coordinates for projection
+        self.ones = torch.ones(b, 1, self.height * self.width, device=device, dtype=dtype)
+        pix_coords = self.grid.view(b, 2, -1)
+        self.pix_coords = torch.cat([pix_coords, self.ones], dim=1)
+
     def forward(self, prediction, K_rect, inv_K_rect):
         # unpack
         if len(prediction) == 2:
@@ -78,20 +92,7 @@ class DisparityToFlow(nn.Module):
         # initialize
         b, _, h, w = depth.shape
         if self.height != h or self.width != w:
-            self.init = True
-            b, _, self.height, self.width = depth.shape
-
-            # grid for pixel displacement computation
-            x = torch.arange(self.width, device=depth.device, dtype=depth.dtype)
-            y = torch.arange(self.height, device=depth.device, dtype=depth.dtype)
-            grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
-            self.grid = torch.stack([grid_x, grid_y]).unsqueeze(0).expand(b, -1, -1, -1)
-
-            # pixel coordinates for projection
-            self.ones = torch.ones(b, 1, self.height * self.width, device=depth.device, dtype=depth.dtype)
-            pix_coords = self.grid.view(b, 2, -1)
-            self.pix_coords = torch.cat([pix_coords, self.ones], dim=1)
-
+            self.init_grid(b, h, w, depth.device, depth.dtype)
         cam_points = depth.view(b, 1, -1) * (inv_K_rect @ self.pix_coords)
         cam_points = torch.cat([cam_points, self.ones], dim=1)
 

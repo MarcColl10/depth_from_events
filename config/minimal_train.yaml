@@ -1,0 +1,87 @@
+defaults:
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+
+dataset:
+  _target_: flights.FlightSequence
+  root_dir: data/raw/flights
+  recording: rosbag2_2024-09-19-14-12-10_0
+  time_window: 10000  # 10ms in us
+  chunk_size: 100
+  subsample: 4  # belongs to this recording
+
+dataloader:
+  _target_: torch.utils.data.DataLoader  # TODO: InfiniteDataLoader?
+  batch_size: null
+  shuffle: false
+  num_workers: 8
+  collate_fn:  # TODO: or hydra.utils.get_method?
+    _target_: data_utils.only_add_batch_dim
+    _partial_: true
+
+# network:
+#   _target_: network.DisparityPoseNetwork
+#   _convert_: object
+#   encoder_channels: 64
+#   memory_channels: 64
+#   decoder_channels: 64
+#   activation_fn:
+#     _target_: torch.nn.ELU
+#     _partial_: true 
+#   final_bias: false
+#   padding_mode: reflect
+#   scaling: [1, 0.01]  # disparity, pose
+
+network:
+  _target_: network.WrappedDisparityPoseNetwork  # TODO: unwrapped not faster?
+  _convert_: object
+  encoder_channels: 64
+  memory_channels: 64
+  decoder_channels: 64
+  activation_fn:
+    _target_: torch.nn.ELU
+    _partial_: true 
+  final_bias: false
+  padding_mode: reflect
+  scaling: [1, 0.01]  # disparity, pose
+
+# network:
+#   _target_: network.WrappedFlowNetwork
+#   encoder_channels: 64
+#   memory_channels: 64
+#   decoder_channels: 64
+#   activation_fn:
+#     _target_: torch.nn.ReLU
+#     _partial_: true
+#   final_bias: true
+#   scaling: 32
+
+transform:
+  _target_: disparity.DisparityToFlow
+  min_depth: 0.1
+  max_depth: 100  # TODO: unrealistic for indoor?
+
+loss_function:
+  _target_: cmax.IterativeContrastMaximization
+  use_events: true
+  accumulation_window: 10
+  base: 5
+  keep_warping: true  # also check for going out outside base
+  num_backprop_events: 0  # 0 = backprop all events
+  select: null  # start:stop, null for everything
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 1.e-4
+
+trainer:
+  epochs: 10  # TODO: move to steps?
+  clip_grad:
+    _target_: torch.nn.utils.clip_grad_norm_  # TODO: does this work?
+    _partial_: true
+    max_norm: 1.0

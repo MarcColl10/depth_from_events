@@ -37,9 +37,9 @@ class NetworkWrapper(nn.Module):
         self.set_state(hidden)
         return x
 
-    def trace(self, input):
+    def trace(self, input, device="cpu"):
         with torch.no_grad():
-            self(input.cpu())
+            self(input.to(device))
         self.reset()
 
     def reset(self):
