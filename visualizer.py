@@ -178,6 +178,7 @@ class RerunVisualizer:
         if compression:
             with io.BytesIO() as output:
                 Image.fromarray(image_nd_array).save(output, format=compression)
-                rr.log(name, rr.EncodedImage(contents=output.getvalue(), media_type="image/jpeg"))
+                media_type = f"image/{compression.lower()}"
+                rr.log(name, rr.EncodedImage(contents=output.getvalue(), media_type=media_type))
         else:
             rr.log(name, rr.Image(image_nd_array))
