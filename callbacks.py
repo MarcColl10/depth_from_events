@@ -20,7 +20,7 @@ class LiveVisualizer(Callback):
 
             # things with events
             for k in [k for k in output.keys() if "events" in k]:
-                self.visualizer.event_frame(output[k][0].cpu(), name=k)
+                self.visualizer.event_frame(output[k][0].cpu().detach(), name=k)
 
             # things with flow
             for k in [k for k in output.keys() if "flow" in k]:
