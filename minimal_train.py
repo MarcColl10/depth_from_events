@@ -12,6 +12,7 @@ Some comments:
 - With compilation: 7s for 6400 network forwards including learning, so ~900 Hz on 4090, > 80% GPU utilization
 - Without compilation: 24s, so ~266 Hz on 4090, 40% GPU utilization
 - Even when using unwrapped version of disparity net (see commented code), still warning about CUDAGraphs
+- On Orin: 40s for 6400 network forwards including learning, so ~160 Hz, varying GPU utilization, between 60-100%
 """
 
 
@@ -20,7 +21,8 @@ def main(config):
     # hardcode device and precision/dtype
     device = torch.device("cuda")
     dtype = torch.float32
-    torch.set_float32_matmul_precision("high")
+    # torch.set_float32_matmul_precision("high")
+    torch.backends.cudnn.benchmark = False
 
     # dataset and dataloader
     dataset = instantiate(config.dataset, dtype=dtype)
