@@ -82,9 +82,10 @@ class Train(LightningModule):
 
                 # add to log if visualizing
                 if self.visualizing:
-                    log[f"{name}_accumulated_events"] += [loss_fn.get_accumulated_events()]
-                    log[f"{name}_image_warped_events_0"] += [loss_fn.compute_iwe(0)]
-                    log[f"{name}_image_warped_events_t"] += [loss_fn.compute_iwe(loss_fn.passes)]
+                    with torch.no_grad():
+                        log[f"{name}_accumulated_events"] += [loss_fn.get_accumulated_events()]
+                        log[f"{name}_image_warped_events_0"] += [loss_fn.compute_iwe(0)]
+                        log[f"{name}_image_warped_events_t"] += [loss_fn.compute_iwe(loss_fn.passes)]
                     # log[f"{name}_accumulated_flow_fw"] += [loss_fn.get_accumulated_flow(loss_fn.passes)]
                     # log[f"{name}_accumulated_flow_bw"] += [loss_fn.get_accumulated_flow(0)]
 

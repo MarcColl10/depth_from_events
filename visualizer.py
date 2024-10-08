@@ -3,6 +3,8 @@ from matplotlib.colors import hsv_to_rgb, Normalize
 import numpy as np
 import rerun as rr
 import rerun.blueprint as rrb
+from PIL import Image
+import io
 
 from data_utils import batched
 from disparity import DisparityToFlow
@@ -146,15 +148,15 @@ class RerunVisualizer:
 
     def event_frame(self, frame, name="events"):
         image = event_frame_to_image(frame)
-        rr.log(name, rr.Image(image))
+        self.log_image(name, image, "jpeg")
 
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
-        rr.log(name, rr.Image(image))
+        self.log_image(name, image, "jpeg")
 
     def disparity_map(self, frame, name="disparity"):
         image = disparity_map_to_image(frame)
-        rr.log(name, rr.Image(image))
+        self.log_image(name, image, "jpeg")
 
     def pose_trajectory(self, pose, name="pose"):
         # https://rerun.io/docs/reference/types/archetypes/transform3d
@@ -169,3 +171,13 @@ class RerunVisualizer:
         self.pose = (orientation, destination)
         self.linestrips.append(destination)
         rr.log(name, rr.LineStrips3D(np.stack(self.linestrips), radii=0.001))
+
+    @staticmethod
+    def log_image(name, image_nd_array, compression=False):
+        # compression could be None, "jpeg", "png"
+        if compression:
+            with io.BytesIO() as output:
+                Image.fromarray(image_nd_array).save(output, format=compression)
+                rr.log(name, rr.EncodedImage(contents=output.getvalue(), media_type="image/jpeg"))
+        else:
+            rr.log(name, rr.Image(image_nd_array))
