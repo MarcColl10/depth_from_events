@@ -1,8 +1,11 @@
+from pathlib import Path
 from dotmap import DotMap  # TODO: move to tensordict
 import hydra
 from hydra.utils import instantiate
-from rich.progress import Progress
+from omegaconf import OmegaConf
+from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn, TimeRemainingColumn
 import torch
+from torch.utils.tensorboard import SummaryWriter
 
 
 """
@@ -14,6 +17,18 @@ Some comments:
 - Even when using unwrapped version of disparity net (see commented code), still warning about CUDAGraphs
 - On Orin: 40s for 6400 network forwards including learning, so ~160 Hz, varying GPU utilization, between 60-100%
 """
+
+
+# from https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
+def flatten_dict(dictionary, parent_key=""):
+    items = []
+    for key, value in dictionary.items():
+        new_key = parent_key + "." + key if parent_key else key
+        if isinstance(value, dict):
+            items.extend(flatten_dict(value, new_key).items())
+        else:
+            items.append((new_key, str(value)))
+    return dict(items)
 
 
 @hydra.main(version_base=None, config_path="config", config_name="minimal_train")
@@ -59,28 +74,44 @@ def main(config):
     # TODO: not working yet, DotMaps?
     # loss_function = torch.compile(loss_function, fullgraph=True, mode="reduce-overhead")
 
-    # training loop
-    with Progress() as progress:
-        epoch_task = progress.add_task("[cyan]epoch: 0/0 loss: 0.000", total=config.trainer.epochs)
-        iteration_task = progress.add_task("[cyan]iter: 0/0", total=len(dataloader))
+    # tensorboard
+    writer = SummaryWriter()
+    writer.add_hparams(
+        flatten_dict(OmegaConf.to_container(config, resolve=True)), {}, run_name=str(Path(writer.log_dir).absolute())
+    )
+    # writer.add_graph(network, torch.zeros(1, 2, *dataset.sensor_size, device=device, dtype=dtype))
 
-        # loop over epochs of same recording
-        for e in range(config.trainer.epochs):
-            progress.reset(iteration_task)
+    # save model state before training
+    torch.save(network.state_dict(), f"{writer.log_dir}/network_0.pt")
+
+    # training loop
+    columns = [
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(
+            style="bar.back", complete_style="bar.complete", finished_style="bar.finished", pulse_style="bar.pulse"
+        ),
+        TaskProgressColumn(show_speed=True),
+        TimeRemainingColumn(elapsed_when_finished=True),
+    ]
+    with Progress(*columns, speed_estimate_period=10) as progress:
+        global_step_task = progress.add_task("[cyan]step: 0 loss: 0.000", total=config.trainer.n_steps)
+
+        # train for certain amount of steps
+        global_step = 0
+        while True:
 
             # loop over chunks of recording
-            epoch_loss, epoch_passes = 0, 0
-            for i, batch in enumerate(dataloader):
+            for batch in dataloader:
 
                 # unpack and move to device
-                frames, auxs, eofs = batch.frames, batch.auxs, batch.eofs
+                frames, auxs = batch.frames, batch.auxs
                 frames = frames.to(device, dtype)
                 auxs = DotMap(events=auxs.events.to(device, dtype), counts=auxs.counts.to(device))  # integer counts
                 K_rect = batch.K_rect.to(device, dtype)
                 inv_K_rect = batch.inv_K_rect.to(device, dtype)
 
                 # loop over steps in chunk
-                for j, (frame, eof) in enumerate(zip(frames, eofs)):
+                for j, frame in enumerate(frames):
                     # get auxiliary: events and counts
                     aux = DotMap({k: v[j] for k, v in auxs.items()})
 
@@ -107,20 +138,35 @@ def main(config):
                         network.detach()
                         # memory.detach_()
                         loss_val = loss_function.compute_and_reset().get("cmax", 0)
-                        epoch_loss += loss_val
-                        epoch_passes += 1
 
-                    # reset if end of sequence
-                    if any(eof):
-                        # network.reset()  # NOTE: resetting network gives slower compile
-                        loss_function.reset()
+                        # step logging
+                        writer.add_scalar("loss_step", loss_val, global_step)
+                        progress.update(
+                            global_step_task,
+                            description=f"[cyan]step: {global_step + loss_function.accumulation_window} loss: {loss_val:.3f}",
+                            advance=loss_function.accumulation_window,
+                        )
+                        global_step += loss_function.accumulation_window
+                        if global_step >= config.trainer.n_steps:
+                            break
 
-                progress.update(iteration_task, description=f"[cyan]iter: {i + 1}/{len(dataloader)}", advance=1)
-            progress.update(
-                epoch_task,
-                description=f"[cyan]epoch: {e + 1}/{config.trainer.epochs} loss: {epoch_loss / epoch_passes:.3f}",
-                advance=1,
-            )
+                    # pretend theres no end of sequence, no resetting
+                    # if we drop incomplete batches this is fine
+
+                # break loops
+                else:
+                    continue
+                break
+            else:
+                continue
+            break
+
+    # save model
+    torch.save(network.state_dict(), f"{writer.log_dir}/network_trained.pt")
+
+    # close tensorboard
+    writer.flush()
+    writer.close()
 
 
 if __name__ == "__main__":

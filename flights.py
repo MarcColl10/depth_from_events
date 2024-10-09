@@ -21,6 +21,7 @@ class FlightSequence:
     recording: str
     time_window: int  # us
     chunk_size: int = 100
+    drop_last: bool = False
     subsample: int | None = None
     dtype: torch.dtype = torch.float32
 
@@ -50,7 +51,7 @@ class FlightSequence:
         self.init_slice()
 
         # mapping from chunks to single steps
-        self.chunk_map = batched(range(len(self.t_start)), self.chunk_size)
+        self.chunk_map = batched(range(len(self.t_start)), self.chunk_size, drop_last=self.drop_last)
 
     def init_slice(self):
         self.t_start = np.arange(self.t0, self.tk - self.time_window, self.time_window)

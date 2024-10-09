@@ -13,10 +13,11 @@ dataset:
   recording: rosbag2_2024-09-19-14-12-10_0
   time_window: 10000  # 10ms in us
   chunk_size: 100
+  drop_last: true
   subsample: 4  # belongs to this recording
 
 dataloader:
-  _target_: torch.utils.data.DataLoader  # TODO: InfiniteDataLoader?
+  _target_: torch.utils.data.DataLoader
   batch_size: null
   shuffle: false
   num_workers: 8
@@ -80,7 +81,7 @@ optimizer:
   lr: 1.e-4
 
 trainer:
-  epochs: 10  # TODO: move to steps?
+  n_steps: 60000  # 60k steps at 100 Hz = 10 minutes
   clip_grad:
     _target_: torch.nn.utils.clip_grad_norm_  # TODO: does this work?
     _partial_: true
