@@ -5,13 +5,8 @@ h5py
 hdf5plugin
 hydra-core
 lightning==2.4.*
-matplotlib
-moviepy
 numpy
-opencv-python
 pandas
 pre-commit
-rerun-sdk
 rich
 tensorboard
-wandb
