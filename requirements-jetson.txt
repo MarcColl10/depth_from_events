@@ -7,6 +7,5 @@ hydra-core
 lightning==2.4.*
 numpy
 pandas
-pre-commit
 rich
 tensorboard

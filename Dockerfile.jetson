@@ -39,8 +39,7 @@ RUN pip install -U pip setuptools wheel
 # https://code.visualstudio.com/remote/advancedcontainers/sharing-git-credentials
 RUN mkdir -p ~/.ssh && ssh-keyscan github.com > ~/.ssh/known_hosts
 RUN --mount=type=ssh,uid=1000 --mount=type=bind,source=$WS_SOURCE,target=$WS_TARGET \
-    pip install -r $WS_TARGET/requirements-jetson.txt \
-    && pre-commit install
+    pip install -r $WS_TARGET/requirements-jetson.txt
 
 WORKDIR ${WS_TARGET}
 CMD ["/bin/bash"]
