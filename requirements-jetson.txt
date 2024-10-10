@@ -1,4 +1,7 @@
 # everything from env.yaml except torch, torchvision, cuda
+pip
+setuptools
+wheel
 dotmap
 git+ssh://git@github.com/Huizerd/cuda_3d_ops
 h5py
@@ -6,6 +9,5 @@ hdf5plugin
 hydra-core
 lightning==2.4.*
 numpy
-pandas
 rich
 tensorboard
