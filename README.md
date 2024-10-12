@@ -1,3 +1,3 @@
-# depth_from_events
+# Depth from events
 
 Efficient self-supervised learning of depth from only events.
