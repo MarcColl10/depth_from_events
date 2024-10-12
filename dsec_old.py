@@ -72,9 +72,9 @@ class DsecSequence:
         R_rect = np.array(cam_to_cam["extrinsics"]["R_rect0"])
         dist_coeffs = np.array(cam_to_cam["intrinsics"]["cam0"]["distortion_coeffs"])
         resolution = cam_to_cam["intrinsics"]["cam0"]["resolution"]  # xy
-        self.bw_rect_map = cv2.initUndistortRectifyMap(
+        self.bw_rect_map, _ = cv2.initUndistortRectifyMap(
             K_dist, dist_coeffs, R_rect, self.K_rect[:3, :3], resolution, cv2.CV_32FC2
-        )[0]
+        )
 
         # get duration of recording
         # don't get full t because of memory usage

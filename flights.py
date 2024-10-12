@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+import cv2
 from dotmap import DotMap
 import h5py
 import hdf5plugin
@@ -23,6 +24,8 @@ class FlightSequence:
     chunk_size: int = 100
     drop_last: bool = False
     subsample: int | None = None
+    real_calib: bool = False
+    rectify: bool = False
     dtype: torch.dtype = torch.float32
 
     def __post_init__(self):
@@ -33,14 +36,41 @@ class FlightSequence:
         # open large h5 files only once
         self.h5 = h5py.File(self.root_dir / f"{self.recording}.h5", "r")
 
-        # intrinsic matrix (fake)
+        # fake or real calibration (from dv camera calib)
         h, w = self.sensor_size
-        fx, fy, cx, cy = [(h + w) / 2, (h + w) / 2, w / 2, h / 2]
+        if self.real_calib:
+            fx = 4.7127708839222407e02
+            fy = 4.7294574644695280e02
+            cx = 3.1379594407795599e02
+            cy = 2.3940490660999910e02
+            dist_coeffs = [
+                -4.0121253068828999e-01,
+                3.1984329538316320e-01,
+                -1.4233002620658525e-03,
+                -3.1760642634814152e-03,
+                -1.6240490428190635e-01,
+            ]
+        else:
+            fx, fy, cx, cy = [(h + w) / 2, (h + w) / 2, w / 2, h / 2]
+            dist_coeffs = [0, 0, 0, 0, 0]
         if self.subsample is not None:
             self.sensor_size = (h // self.subsample, w // self.subsample)
             fx, fy, cx, cy = [v / self.subsample for v in [fx, fy, cx, cy]]
-        self.K_rect = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
+        K_dist = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
+        dist_coeffs = np.array(dist_coeffs, dtype=np.float32)
+        self.K_rect, _ = cv2.getOptimalNewCameraMatrix(K_dist, dist_coeffs, self.sensor_size[::-1], 0)
         self.inv_K_rect = np.linalg.inv(self.K_rect)
+
+        # backward rectification map
+        self.bw_rect_map, _ = cv2.initUndistortRectifyMap(
+            K_dist, dist_coeffs, None, self.K_rect, self.sensor_size[::-1], cv2.CV_32FC2
+        )
+
+        # forward rectification map
+        grid_x, grid_y = np.meshgrid(np.arange(w), np.arange(h))
+        original_coords = np.stack([grid_x, grid_y], axis=-1).reshape(-1, 1, 2).astype(np.float32)
+        rect_coords = cv2.undistortPoints(original_coords, K_dist, dist_coeffs, P=self.K_rect)
+        self.fw_rect_map = rect_coords.reshape(h, w, 2)
 
         # get duration of recording
         # don't get full t because of memory usage
@@ -82,12 +112,18 @@ class FlightSequence:
                 y //= self.subsample
                 x //= self.subsample
 
+            # rectify events: forward rectification
+            if self.rectify:
+                x_rect, y_rect = self.fw_rect_map[y, x].T
+            else:
+                x_rect, y_rect = x, y
+
             # list of events to structured array
             dtype = np.dtype([("t", np.float64), ("y", np.float32), ("x", np.float32), ("p", np.int8)])
             lst = np.empty(len(t), dtype=dtype)
             lst["t"] = t
-            lst["y"] = y
-            lst["x"] = x
+            lst["y"] = y_rect
+            lst["x"] = x_rect
             lst["p"] = p
 
             # make into event count frame
@@ -97,6 +133,11 @@ class FlightSequence:
             p = torch.from_numpy(p.astype(np.int64))
             frame = torch.zeros(2, *self.sensor_size, dtype=torch.int64)  # torch is faster
             frame.index_put_((p, y, x), torch.ones_like(p), accumulate=True)
+
+            # rectify frame: backward rectification
+            if self.rectify:
+                frame = cv2.remap(frame.numpy().transpose(1, 2, 0), self.bw_rect_map, None, cv2.INTER_NEAREST)
+                frame = torch.from_numpy(frame.transpose(2, 0, 1))
 
             # discard if few events or same timestamp
             if len(lst) < 10:
@@ -150,6 +191,8 @@ class FlightDataModule(LightningDataModule):
         time_window,
         chunk_size,
         subsample,
+        real_calib,
+        rectify,
         precision,
         return_events,
         num_workers,
@@ -160,6 +203,8 @@ class FlightDataModule(LightningDataModule):
         self.time_window = time_window
         self.chunk_size = chunk_size
         self.subsample = subsample
+        self.real_calib = real_calib
+        self.rectify = rectify
         self.precision = precision
         self.return_events = return_events
         self.num_workers = num_workers
@@ -195,6 +240,8 @@ class FlightDataModule(LightningDataModule):
             time_window=self.time_window,
             chunk_size=self.chunk_size,
             subsample=self.subsample,
+            real_calib=self.real_calib,
+            rectify=self.rectify,
             dtype=self.dtype,
         )
         if stage == "fit":

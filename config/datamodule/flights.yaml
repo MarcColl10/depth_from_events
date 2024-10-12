@@ -3,6 +3,8 @@ root_dir: data/raw/flights
 time_window: 10000  # 10ms in us
 chunk_size: 100
 subsample: 4  # filters recordings based on their subsampling; null = full image
+real_calib: true  # use real calibration data
+rectify: true
 precision: ${..trainer.precision}
 return_events: true  # always
 num_workers: 8
