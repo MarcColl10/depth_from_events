@@ -37,7 +37,7 @@ def main(config):
     device = torch.device("cuda")
     dtype = torch.float32
     # torch.set_float32_matmul_precision("high")
-    torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.benchmark = False
 
     # dataset and dataloader
     dataset = instantiate(config.dataset, dtype=dtype)
