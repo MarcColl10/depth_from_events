@@ -1,4 +1,4 @@
-_target_: datamodule.DsecDataModule
+_target_: depth_from_events.datamodule.DsecDataModule
 root_dir: data/dsec_10ms100000c_0.25ts_rect  # created with dsec.py
 train_seq_len: 100
 train_crop: [128, 128]  # hw for random, tlbr or null for fixed

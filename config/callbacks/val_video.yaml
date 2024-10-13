@@ -1,4 +1,4 @@
 video:
-  _target_: callbacks.VideoLogger
+  _target_: depth_from_events.callbacks.VideoLogger
   recording: thun_00_a
   range: [160, 180]

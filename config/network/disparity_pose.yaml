@@ -1,4 +1,4 @@
-_target_: network.WrappedDisparityPoseNetwork
+_target_: depth_from_events.network.WrappedDisparityPoseNetwork
 encoder_channels: 64
 memory_channels: 64
 decoder_channels: 64

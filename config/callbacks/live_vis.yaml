@@ -1,5 +1,5 @@
 visualizer:
-  _target_: callbacks.LiveVisualizer
+  _target_: depth_from_events.callbacks.LiveVisualizer
   app_id: ${...name}
   server: 100.74.49.39:9876  # replace with your ip
   web: false

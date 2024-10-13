@@ -13,7 +13,7 @@ import numpy.lib.recfunctions as rfn
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 
-from data_utils import batched, only_add_batch_dim
+from .data_utils import batched, only_add_batch_dim
 
 
 @dataclass

@@ -1,3 +1,3 @@
-_target_: disparity.DisparityToFlow
+_target_: depth_from_events.disparity.DisparityToFlow
 min_depth: 0.1
 max_depth: 100

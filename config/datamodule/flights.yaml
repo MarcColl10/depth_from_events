@@ -1,4 +1,4 @@
-_target_: flights.FlightDataModule
+_target_: depth_from_events.flights.FlightDataModule
 root_dir: data/raw/flights
 time_window: 10000  # 10ms in us
 chunk_size: 100
