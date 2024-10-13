@@ -1,7 +1,7 @@
 import torch.nn as nn
 
-from blocks import conv_encoder, flatten_decoder, LazyConvGru, upsample_decoder
-from network_utils import NetworkWrapper
+from .blocks import conv_encoder, flatten_decoder, LazyConvGru, upsample_decoder
+from .network_utils import NetworkWrapper
 
 
 class FlowNetwork(nn.Module):

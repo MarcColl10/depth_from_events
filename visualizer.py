@@ -6,8 +6,8 @@ import rerun.blueprint as rrb
 from PIL import Image
 import io
 
-from data_utils import batched
-from disparity import DisparityToFlow
+from .data_utils import batched
+from .disparity import DisparityToFlow
 
 
 def event_frame_to_image(frame, pol_channels=[0, 1]):

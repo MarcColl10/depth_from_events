@@ -1,9 +1,9 @@
+from cuda_3d_ops import iterative_3d_warp_cuda
 import torch
 import torch.nn as nn
 
-from cmax_utils import extract_events_from_frames, format_events
-from cuda_3d_ops import iterative_3d_warp_cuda
-from iwe import build_iwe
+from .cmax_utils import extract_events_from_frames, format_events
+from .iwe import build_iwe
 
 
 class ContrastMaximization(nn.Module):

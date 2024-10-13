@@ -1,6 +1,5 @@
-import torch
-
 from cuda_3d_ops import trilinear_splat_cuda
+import torch
 
 
 def build_iwe(warped_events, base, select, resolution):

@@ -2,7 +2,7 @@ from dotmap import DotMap
 from lightning.pytorch.callbacks import Callback
 import numpy as np
 
-from visualizer import RerunVisualizer, flow_map_to_image
+from .visualizer import RerunVisualizer, flow_map_to_image
 
 
 class LiveVisualizer(Callback):

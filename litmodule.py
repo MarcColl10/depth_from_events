@@ -2,7 +2,7 @@ from dotmap import DotMap
 from lightning import LightningModule
 import torch
 
-import callbacks
+from . import callbacks
 
 
 class Train(LightningModule):
