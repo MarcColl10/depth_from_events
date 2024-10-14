@@ -6,8 +6,8 @@ from .visualizer import RerunVisualizer, flow_map_to_image
 
 
 class LiveVisualizer(Callback):
-    def __init__(self, app_id, server, web):
-        self.visualizer = RerunVisualizer(app_id, server, web)
+    def __init__(self, app_id, server, web, blueprint=None):
+        self.visualizer = RerunVisualizer(app_id, server, web, blueprint)
 
     def on_batch_end(self, outputs):
         # update blueprint
@@ -23,7 +23,7 @@ class LiveVisualizer(Callback):
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
             # things with flow
-            for k in [k for k in output.keys() if "flow" in k]:
+            for k in [k for k in output.keys() if k.endswith("flow")]:
                 self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
@@ -33,6 +33,10 @@ class LiveVisualizer(Callback):
             # things with pose
             for k in [k for k in output.keys() if "pose" in k]:
                 self.visualizer.pose_trajectory(output[k][0].detach().cpu(), name=k)
+
+            # for scalar values
+            for k in [k for k in output.keys() if isinstance(output[k], (int, float))]:
+                self.visualizer.log_scalar(k, output[k])
 
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)

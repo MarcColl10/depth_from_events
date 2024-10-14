@@ -14,7 +14,7 @@ class RerunVisualizer:
     Live visualizer using Rerun.
     """
 
-    def __init__(self, app_id, server, web):
+    def __init__(self, app_id, server, web, blueprint=None):
         rr.init(app_id)
         rr.serve() if web else rr.connect(server)
 
@@ -22,6 +22,9 @@ class RerunVisualizer:
         self.pose = (np.eye(3), np.zeros(3))
         self.linestrips = [np.zeros(3)]
         rr.log("pose", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+        if blueprint is not None:
+            self.blueprint = blueprint
+            rr.send_blueprint(self.blueprint, make_active=True)
 
     def update_blueprint(self, quantities):
         if not hasattr(self, "blueprint"):
@@ -74,3 +77,7 @@ class RerunVisualizer:
                 rr.log(name, rr.EncodedImage(contents=output.getvalue(), media_type=media_type))
         else:
             rr.log(name, rr.Image(image_nd_array))
+
+    @staticmethod
+    def log_scalar(name, scalar):
+        rr.log(name, rr.Scalar(scalar))
