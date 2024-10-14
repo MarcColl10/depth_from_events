@@ -11,11 +11,11 @@ class LiveVisualizer(Callback):
 
     def on_batch_end(self, outputs):
         # update blueprint
-        self.visualizer.update_blueprint(outputs.keys())
+        all_keys = set()
+        [all_keys.update(output.keys()) for output in outputs.values()]
+        self.visualizer.update_blueprint(list(all_keys))
 
-        # transpose dict of lists to list of dicts so we can iterate
-        outputs = [DotMap(zip(outputs, col)) for col in zip(*outputs.values())]
-        for output in outputs:
+        for output in outputs.values():
             self.visualizer.set_counter()
 
             # things with events

@@ -1,4 +1,5 @@
 from dotmap import DotMap
+from collections import OrderedDict
 from lightning import LightningModule
 import torch
 
@@ -44,8 +45,10 @@ class Train(LightningModule):
         frames, auxs, eofs, rec = batch.frames, batch.auxs, batch.eofs, batch.recording
 
         # go over sequence
-        log = DotMap()
+        log_seq = OrderedDict()
         for i, (frame, eof) in enumerate(zip(frames, eofs)):
+            log_seq[i] = DotMap()
+            log = log_seq[i]
             # get auxiliary: events and counts
             aux = DotMap({k: v[i] for k, v in auxs.items()})
 
@@ -69,11 +72,11 @@ class Train(LightningModule):
 
             # add to log if visualizing
             if self.visualizing:
-                log.events += [frame]
-                log.flow += [flow]
+                log[f"{stage}/events"] = frame
+                log[f"{stage}/flow"] = flow
                 if self.transform is not None:
-                    log.disparity += [disparity]
-                    log.pose += [pose]
+                    log.disparity = disparity
+                    log.pose = pose
 
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():
@@ -83,9 +86,9 @@ class Train(LightningModule):
                 # add to log if visualizing
                 if self.visualizing:
                     with torch.no_grad():
-                        log[f"{name}_accumulated_events"] += [loss_fn.get_accumulated_events()]
-                        log[f"{name}_image_warped_events_0"] += [loss_fn.compute_iwe(0)]
-                        log[f"{name}_image_warped_events_t"] += [loss_fn.compute_iwe(loss_fn.passes)]
+                        log[f"{stage}/{name}_accumulated_events"] = loss_fn.get_accumulated_events()
+                        log[f"{stage}/{name}_image_warped_events_0"] = loss_fn.compute_iwe(0)
+                        log[f"{stage}/{name}_image_warped_events_t"] = loss_fn.compute_iwe(loss_fn.passes)
                     # log[f"{name}_accumulated_flow_fw"] += [loss_fn.get_accumulated_flow(loss_fn.passes)]
                     # log[f"{name}_accumulated_flow_bw"] += [loss_fn.get_accumulated_flow(0)]
 
@@ -124,7 +127,7 @@ class Train(LightningModule):
                 for loss_fn in self.loss_functions[stage].values():
                     loss_fn.reset()
 
-        return log if self.visualizing else None
+        return log_seq if self.visualizing else None
 
     def training_step(self, batch, batch_idx):
         return self.shared_step(batch, batch_idx, "train")
