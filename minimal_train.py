@@ -8,6 +8,8 @@ from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn, T
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from depth_from_events.visualizer_utils import disparity_map_to_image, event_frame_to_image, flow_map_to_image
+
 
 """
 Some comments:
@@ -141,13 +143,20 @@ def main(config):
                         loss_val = loss_function.compute_and_reset().get("cmax", 0)
 
                         # step logging
-                        writer.add_scalar("loss_step", loss_val, global_step)
+                        global_step += loss_function.accumulation_window
+                        writer.add_scalar("loss", loss_val, global_step)
+                        if global_step % 1000 == 0:
+                            event_image = event_frame_to_image(frame[0].cpu())
+                            disparity_image = disparity_map_to_image(yhat[0][0].detach().cpu())
+                            flow_image = flow_map_to_image(flow[0].detach().cpu())
+                            writer.add_image("events", event_image, global_step, dataformats="HWC")
+                            writer.add_image("disparity", disparity_image, global_step, dataformats="HWC")
+                            writer.add_image("flow", flow_image, global_step, dataformats="HWC")
                         progress.update(
                             global_step_task,
-                            description=f"[cyan]step: {global_step + loss_function.accumulation_window} loss: {loss_val:.3f}",
+                            description=f"[cyan]step: {global_step} loss: {loss_val:.3f}",
                             advance=loss_function.accumulation_window,
                         )
-                        global_step += loss_function.accumulation_window
                         if global_step >= config.trainer.n_steps:
                             break
 

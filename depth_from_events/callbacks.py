@@ -1,4 +1,3 @@
-from dotmap import DotMap
 from lightning.pytorch.callbacks import Callback
 import numpy as np
 

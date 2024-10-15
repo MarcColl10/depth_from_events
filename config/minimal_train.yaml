@@ -10,7 +10,7 @@ hydra:
 dataset:
   _target_: depth_from_events.flights.FlightSequence
   root_dir: data/raw/flights
-  recording: rosbag2_2024-09-19-14-12-10_0
+  recording: rosbag2_2024-10-14-18-22-53_0
   time_window: 10000  # 10ms in us
   chunk_size: 100
   drop_last: true

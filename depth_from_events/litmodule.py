@@ -1,5 +1,6 @@
-from dotmap import DotMap
 from collections import OrderedDict
+
+from dotmap import DotMap
 from lightning import LightningModule
 import torch
 
