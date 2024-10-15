@@ -6,6 +6,7 @@ wandb:
   entity: huizerd
   project: depth_from_events
 
-name: ${runid}_${checkpoint}
+stage: validate
+name: ${stage}_${runid}_${checkpoint}
 runid: ???
 checkpoint: ???

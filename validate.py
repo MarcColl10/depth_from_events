@@ -7,7 +7,7 @@ from omegaconf import OmegaConf, open_dict
 import wandb
 
 
-@hydra.main(version_base=None, config_path="config", config_name="eval")  # only hydra config and overrides
+@hydra.main(version_base=None, config_path="config", config_name="validate")  # only hydra config and overrides
 def main(overrides):
     # get checkpoint
     api = wandb.Api()

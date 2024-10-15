@@ -76,8 +76,8 @@ class Train(LightningModule):
                 log[f"{stage}/events"] = frame
                 log[f"{stage}/flow"] = flow
                 if self.transform is not None:
-                    log.disparity = disparity
-                    log.pose = pose
+                    log[f"{stage}/disparity"] = disparity
+                    log[f"{stage}/pose"] = pose
 
             # go over loss functions
             for name, loss_fn in self.loss_functions[stage].items():

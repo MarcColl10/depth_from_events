@@ -17,8 +17,8 @@ UZH_FPV_TRAIN_RECORDINGS = [
     # "indoor_forward_6_davis_with_gt",
     # "indoor_forward_7_davis_with_gt",
     # "indoor_forward_8_davis",
-    # "indoor_forward_9_davis_with_gt",
-    "indoor_forward_10_davis_with_gt",
+    "indoor_forward_9_davis_with_gt",
+    # "indoor_forward_10_davis_with_gt",
     # "indoor_forward_11_davis",
     # "indoor_forward_12_davis",
 ]

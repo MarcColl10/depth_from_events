@@ -6,29 +6,29 @@ _args_:
         contents:
           - _target_: rerun.blueprint.Spatial2DView
             name: events
-            origin: /train/events
+            origin: /${stage}/events
           - _target_: rerun.blueprint.Spatial2DView
             name: flow
-            origin: /train/flow
+            origin: /${stage}/flow
           - _target_: rerun.blueprint.Spatial2DView
             name: disparity
-            origin: /disparity
+            origin: /${stage}/disparity
       - _target_: rerun.blueprint.Horizontal
         contents:
           - _target_: rerun.blueprint.Spatial2DView
             name: accumulated_events
-            origin: /train/cmax_accumulated_events
+            origin: /${stage}/cmax_accumulated_events
           - _target_: rerun.blueprint.Spatial2DView
             name: warped_events_0
-            origin: /train/cmax_image_warped_events_0
+            origin: /${stage}/cmax_image_warped_events_0
           - _target_: rerun.blueprint.Spatial2DView
             name: warped_events_t
-            origin: /train/cmax_image_warped_events_t
+            origin: /${stage}/cmax_image_warped_events_t
       - _target_: rerun.blueprint.Horizontal
         contents:
           - _target_: rerun.blueprint.Spatial3DView
             name: pose
-            origin: pose
+            origin: /${stage}/pose
           - _target_: rerun.blueprint.TimeSeriesView
             name: metrics
             origin: /

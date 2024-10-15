@@ -1,5 +1,5 @@
 defaults:
-  - datamodule: flights
+  - datamodule: uzh_fpv
   - litmodule: train
   - network: disparity_pose
   - transform: disparity_to_flow
@@ -18,4 +18,5 @@ defaults:
   - hydra: no_logging
   - _self_  # to disable warning
 
-name: train
+stage: train
+name: ${stage}
