@@ -21,6 +21,7 @@ class FlightSequence:
     root_dir: str
     recording: str
     time_window: int  # us
+    t0_skip: int = 0  # us
     chunk_size: int = 100
     drop_last: bool = False
     subsample: int | None = None
@@ -75,6 +76,7 @@ class FlightSequence:
         # get duration of recording
         # don't get full t because of memory usage
         self.t0, self.tk = self.h5["events/t"][[0, -1]]  # us
+        self.t0 += self.t0_skip
         self.rec_duration = self.tk - self.t0
 
         # slice dataset
@@ -211,17 +213,21 @@ class FlightDataModule(LightningDataModule):
 
     def prepare_data(self):
         # recordings
-        # name, subsample
+        # name, skip time in us at start, subsample
         recordings = [
-            ("rosbag2_2024-09-19-14-06-54_0", None),
-            ("rosbag2_2024-09-19-14-09-21_0", 2),
-            ("rosbag2_2024-09-19-14-12-10_0", 4),
-            # ("rosbag2_2024-10-03-19-45-14_0", 4),
-            # ("rosbag2_2024-10-03-19-55-33_0", 4),
-            # ("rosbag2_2024-10-03-20-48-17_0", 4),
-            # ("rosbag2_2024-10-03-20-56-06_0", 4),
+            ("rosbag2_2024-09-19-14-06-54_0", 0, None),
+            ("rosbag2_2024-09-19-14-09-21_0", 0, 2),
+            ("rosbag2_2024-09-19-14-12-10_0", 0, 4),
+            # ("rosbag2_2024-10-03-19-45-14_0", 0, 4),
+            # ("rosbag2_2024-10-03-19-55-33_0", 0, 4),
+            # ("rosbag2_2024-10-03-20-48-17_0", 0, 4),
+            # ("rosbag2_2024-10-03-20-56-06_0", 0, 4),
+            # ("rosbag2_2024-10-15-13-30-31_0", 0, 4),
+            # ("rosbag2_2024-10-16-13-38-16_0", 120e6, 4),  # 2 minutes in us
+            # ("rosbag2_2024-10-17-09-08-24_0", 120e6, 4),  # 2 minutes in us
+            # ("rosbag2_2024-10-17-09-12-27_0", 120e6, 4),  # 2 minutes in us
         ]
-        self.recordings = [r for r, s in recordings if s == self.subsample]
+        self.recordings = [(r, t) for r, t, s in recordings if s == self.subsample]
 
         # set precision
         if str(self.precision) == "32":
@@ -245,11 +251,11 @@ class FlightDataModule(LightningDataModule):
             dtype=self.dtype,
         )
         if stage == "fit":
-            self.train_dataset = ConcatDataset([sequence(recording=rec) for rec in self.recordings])
-            self.train_frame_shape = (1, 2, *sequence(recording=self.recordings[0]).sensor_size)
+            self.train_dataset = ConcatDataset([sequence(recording=rec, t0_skip=t0) for rec, t0 in self.recordings])
+            self.train_frame_shape = (1, 2, *sequence(recording=self.recordings[0][0]).sensor_size)
         if stage in ["fit", "validate"]:
-            self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.recordings])
-            self.val_frame_shape = (1, 2, *sequence(recording=self.recordings[0]).sensor_size)
+            self.val_dataset = ConcatDataset([sequence(recording=rec, t0_skip=t0) for rec, t0 in self.recordings])
+            self.val_frame_shape = (1, 2, *sequence(recording=self.recordings[0][0]).sensor_size)
 
     def dataloader(self, stage):
         dataset = self.train_dataset if stage == "train" else self.val_dataset

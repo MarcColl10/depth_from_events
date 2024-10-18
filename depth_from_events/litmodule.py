@@ -33,7 +33,7 @@ class Train(LightningModule):
 
         # set visualization
         self.visualizing = any(
-            [isinstance(cb, (callbacks.LiveVisualizer, callbacks.VideoLogger)) for cb in self.trainer.callbacks]
+            [isinstance(cb, (callbacks.LiveVisualizer, callbacks.ImageLogger)) for cb in self.trainer.callbacks]
         )
 
     def shared_step(self, batch, batch_idx, stage):
@@ -80,35 +80,45 @@ class Train(LightningModule):
                     log[f"{stage}/pose"] = pose
 
             # go over loss functions
+            loss = 0
             for name, loss_fn in self.loss_functions[stage].items():
                 # forward
-                loss_fn(frame, aux, flow)
+                if name in ["cmax", "rsat"]:
+                    loss_fn(frame, aux, flow)
+                elif name in ["ea_smooth"]:
+                    loss_fn(frame, disparity)
 
                 # add to log if visualizing
                 if self.visualizing:
-                    with torch.no_grad():
-                        log[f"{stage}/{name}_accumulated_events"] = loss_fn.get_accumulated_events()
-                        log[f"{stage}/{name}_image_warped_events_0"] = loss_fn.compute_iwe(0)
-                        log[f"{stage}/{name}_image_warped_events_t"] = loss_fn.compute_iwe(loss_fn.passes)
-                    # log[f"{name}_accumulated_flow_fw"] += [loss_fn.get_accumulated_flow(loss_fn.passes)]
-                    # log[f"{name}_accumulated_flow_bw"] += [loss_fn.get_accumulated_flow(0)]
+                    if name in ["cmax", "rsat"]:
+                        with torch.no_grad():
+                            log[f"{stage}/{name}_accumulated_events"] = loss_fn.get_accumulated_events()
+                            log[f"{stage}/{name}_image_warped_events_0"] = loss_fn.compute_iwe(0)
+                            log[f"{stage}/{name}_image_warped_events_t"] = loss_fn.compute_iwe(loss_fn.passes)
+                            # log[f"{name}_accumulated_flow_fw"] += [loss_fn.get_accumulated_flow(loss_fn.passes)]
+                            # log[f"{name}_accumulated_flow_bw"] += [loss_fn.get_accumulated_flow(0)]
 
                 # backward if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
-                    loss = loss_fn.backward()
+                    dloss = loss_fn.backward()
+                    loss += dloss if dloss is not None else 0
 
-                    # training: backprop and optimize
-                    if stage == "train" and loss is not None:
-                        optimizer.zero_grad()
-                        self.manual_backward(loss)
-                        self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
-                        optimizer.step()
-                        self.log("train/lr", scheduler.get_last_lr()[0]) if scheduler is not None else None
-                        scheduler.step() if scheduler is not None else None
+            # training: backprop and optimize
+            if stage == "train" and loss:
+                optimizer.zero_grad()
+                self.manual_backward(loss)
+                self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
+                optimizer.step()
+                self.log("train/lr", scheduler.get_last_lr()[0]) if scheduler is not None else None
+                scheduler.step() if scheduler is not None else None
 
-                        # detach network state
-                        self.network.detach()
+                # detach network state
+                self.network.detach()
 
+            # go over loss functions
+            for name, loss_fn in self.loss_functions[stage].items():
+                # reset if enough passes
+                if loss_fn.passes == loss_fn.accumulation_window:
                     # reset loss and log
                     # loss per tbptt window per batch sample
                     # default batch size (seq_len) gives same value but rounding errors

@@ -39,7 +39,7 @@ def main(config):
     # hardcode device and precision/dtype
     device = torch.device("cuda")
     dtype = torch.float32
-    # torch.set_float32_matmul_precision("high")
+    torch.set_float32_matmul_precision("high")
     # torch.backends.cudnn.benchmark = False
 
     # dataset and dataloader
@@ -56,6 +56,7 @@ def main(config):
     print(f"\n{network}\n\nwith {sum(p.numel() for p in network.parameters())} parameters\n")
 
     # compile network
+    # network = torch.compile(network, fullgraph=True, mode="max-autotune")
     network = torch.compile(network, fullgraph=True, mode="reduce-overhead")
 
     # disparity + pose to flow transform
@@ -134,12 +135,13 @@ def main(config):
                     # detach network after optimizer step (tbptt)
                     if loss_function.passes == loss_function.accumulation_window:
                         loss = loss_function.backward()
-                        optimizer.zero_grad()
-                        loss.backward()
-                        clip_grad(network.parameters())
-                        optimizer.step()
-                        network.detach()
-                        # memory.detach_()
+                        if loss is not None:
+                            optimizer.zero_grad()
+                            loss.backward()
+                            clip_grad(network.parameters())
+                            optimizer.step()
+                            network.detach()
+                            # memory.detach_()
                         loss_val = loss_function.compute_and_reset().get("cmax", 0)
 
                         # step logging

@@ -172,12 +172,7 @@ class DsecSequence:
 
             # compute crop for list
             top, left, bottom, right = self.crop_corners
-            mask = (
-                (y_rect >= top)
-                & (y_rect < bottom - 1)  # -1 because zero-indexed
-                & (x_rect >= left)
-                & (x_rect < right - 1)
-            )
+            mask = (y_rect >= top) & (y_rect < bottom) & (x_rect >= left) & (x_rect < right)
 
             # if event count above threshold: shorten window
             # TODO: when rectifying, this will give wrong sum of events in image

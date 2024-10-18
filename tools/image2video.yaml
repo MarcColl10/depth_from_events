@@ -1,0 +1,24 @@
+defaults:
+  - override hydra/hydra_logging: none  # override needed because set as default before
+  - override hydra/job_logging: none
+
+hydra:
+  output_subdir: null  # not necessary to set hydra.job.chdir to false
+  run:
+    dir: .  # without this, outputs directory is still created
+
+name: ???
+root_dir: ???
+output_dir: logs/videos
+names:
+  - validate/events
+  - validate/cmax_accumulated_events
+  - validate/cmax_image_warped_events_t
+  - validate/flow
+  - validate/disparity
+i0: null
+i1: null
+fps: 100
+cols: null
+resize: 1
+bitrate: 10M

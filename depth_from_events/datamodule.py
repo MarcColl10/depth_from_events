@@ -129,8 +129,7 @@ class FrameSequence:
                 p = self.h5["events/p"][start:stop].astype(np.float32)  # bool to float32
 
                 # crop
-                # TODO: or < bottom?
-                mask = (y >= top) & (y < bottom - 1) & (x >= left) & (x < right - 1)
+                mask = (y >= top) & (y < bottom) & (x >= left) & (x < right)
                 t, y, x, p = t[mask], y[mask], x[mask], p[mask]
                 y, x = y - top, x - left  # rebase to crop
 

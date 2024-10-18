@@ -1,0 +1,9 @@
+visualizer:
+  _target_: depth_from_events.callbacks.ImageLogger
+  root_dir: logs/images/${...name}
+  keys:
+    - ${stage}/events
+    - ${stage}/cmax_accumulated_events
+    - ${stage}/cmax_image_warped_events_t
+    - ${stage}/flow
+    - ${stage}/disparity

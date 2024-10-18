@@ -1,0 +1,4 @@
+ea_smooth:
+  _target_: depth_from_events.smooth.EdgeAwareSmoothing
+  accumulation_window: 10
+  weight: 0.05

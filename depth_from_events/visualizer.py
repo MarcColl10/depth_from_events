@@ -1,8 +1,11 @@
+import io
+from pathlib import Path
+import shutil
+
 import numpy as np
+from PIL import Image
 import rerun as rr
 import rerun.blueprint as rrb
-from PIL import Image
-import io
 
 from .data_utils import batched
 from .disparity import DisparityToFlow
@@ -81,3 +84,33 @@ class RerunVisualizer:
     @staticmethod
     def log_scalar(name, scalar):
         rr.log(name, rr.Scalar(scalar))
+
+
+class ImageVisualizer:
+    def __init__(self, root_dir, names):
+        self.root_dir = Path(root_dir)
+        shutil.rmtree(self.root_dir) if self.root_dir.exists() else None
+        for name in names:
+            (self.root_dir / name).mkdir(exist_ok=True, parents=True)
+
+        self.counter = 0
+
+    def set_counter(self):
+        self.counter += 1
+
+    def save_image(self, name, image, format):
+        if (self.root_dir / name).exists():
+            image = Image.fromarray(image)
+            image.save(self.root_dir / name / f"{self.counter:05d}.{format}")
+
+    def event_frame(self, frame, name="events"):
+        image = event_frame_to_image(frame)
+        self.save_image(name, image, "png")
+
+    def flow_map(self, frame, name="flow"):
+        image = flow_map_to_image(frame)
+        self.save_image(name, image, "png")
+
+    def disparity_map(self, frame, name="disparity"):
+        image = disparity_map_to_image(frame)
+        self.save_image(name, image, "png")

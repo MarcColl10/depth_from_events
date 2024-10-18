@@ -27,7 +27,7 @@ UZH_FPV_VAL_RECORDINGS = [
 ]
 
 
-def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, subsample, ts_res, rectify):
+def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, crop, subsample, ts_res, rectify):
     """
     Convert UZH-FPV dataset to h5 files containing raw events and event frames.
 
@@ -36,6 +36,7 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
         download_dir (str): Directory to download the raw dataset.
         time_window (float): Time window in seconds to split the dataset into frames.
         count_window (int): Number of events to split the dataset into frames.
+        crop (tuple): Crop the sensor to (top, left, bottom, right).
         subsample (int): Subsample factor to "turn off" pixels; 2 would reduce resolution by half.
         ts_res (float): Timestamp resolution to quantize the average timestamp channel.
         rectify (bool): Whether to rectify the frames using the calibration data.
@@ -45,7 +46,9 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
     # time in seconds to skip at the beginning to approx. start at takeoff
     root_dir = Path(root_dir)
     download_dir = Path(download_dir)
-    sensor_size = (260, 346) if subsample is None else (260 // subsample, 346 // subsample)  # height, width
+    sensor_size = (260, 346) if crop is None else (crop[2] - crop[0], crop[3] - crop[1])  # height, width
+    if subsample is not None:
+        sensor_size = (sensor_size[0] // subsample, sensor_size[1] // subsample)
     recordings = [
         ("indoor_forward_3_davis_with_gt", 30.0),
         ("indoor_forward_5_davis_with_gt", 30.0),
@@ -143,6 +146,13 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
 
                 # put in raw
                 for df in track(events, description=f"Converting {rec} to h5..."):
+                    # crop: correct xy value
+                    if crop is not None:
+                        df = df.loc[
+                            (df["x"] >= crop[1]) & (df["x"] < crop[3]) & (df["y"] >= crop[0]) & (df["y"] < crop[2])
+                        ]
+                        df.loc[:, "x"] -= crop[1]
+                        df.loc[:, "y"] -= crop[0]
                     # subsample: filter by xy value
                     if subsample is not None:
                         df = df.loc[(df["x"] % subsample == 0) & (df["y"] % subsample == 0)]
@@ -180,6 +190,10 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
                     cam_to_cam = yaml.safe_load(f)
                 fx, fy, cx, cy = cam_to_cam["cam0"]["intrinsics"]
                 resolution = cam_to_cam["cam0"]["resolution"]  # xy
+                if crop is not None:
+                    resolution = [crop[3] - crop[1], crop[2] - crop[0]]
+                    cx -= crop[1]
+                    cy -= crop[0]
                 if subsample is not None:
                     resolution = [r // subsample for r in resolution]
                     fx, fy, cx, cy = [v / subsample for v in [fx, fy, cx, cy]]
@@ -279,16 +293,18 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, sub
 
 if __name__ == "__main__":
     time_window = 0.01
-    subsample = None
+    crop = [2, 13, 258, 333]
+    subsample = 2
     ts_res = 0.25
     rectify = True
-    root_dir = f"data/uzh_fpv_{int(time_window * 1000)}ms{'_subs' + str(subsample) if subsample is not None else ''}_{ts_res}ts{'_rect' if rectify else ''}"
+    root_dir = f"data/uzh_fpv_{int(time_window * 1000)}ms{'_crop' + str(crop) if crop is not None else ''}{'_subs' + str(subsample) if subsample is not None else ''}_{ts_res}ts{'_rect' if rectify else ''}"
     print(f"Processing UZH-FPV dataset to {root_dir}...")
     get_uzh_fpv_h5_frames(
         root_dir,
         download_dir="data/raw/uzh_fpv",
         time_window=time_window,
         count_window=None,
+        crop=crop,
         subsample=subsample,
         ts_res=ts_res,
         rectify=rectify,

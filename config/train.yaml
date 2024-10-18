@@ -5,6 +5,7 @@ defaults:
   - transform: disparity_to_flow
   - loss_functions@loss_functions.train:
     - cmax_iter
+    # - ea_smooth
   - loss_functions@loss_functions.validate:
     - cmax_iter
     - rsat
