@@ -45,7 +45,7 @@ class DisparityPoseNetwork(nn.Module):
         self.scaling = scaling
 
         self.encoder = conv_encoder(encoder_channels, activation_fn, padding_mode=padding_mode)
-        self.memory = LazyConvGru(memory_channels, 3)
+        self.memory = LazyConvGru(memory_channels, 3, padding_mode=padding_mode)
         self.disp_decoder = upsample_decoder(
             decoder_channels, activation_fn, final_bias, padding_mode=padding_mode, mode="disparity"
         )
