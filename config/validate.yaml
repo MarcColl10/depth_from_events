@@ -9,4 +9,4 @@ wandb:
 stage: validate
 name: ${stage}_${runid}_${checkpoint}
 runid: ???
-checkpoint: ???
+checkpoint: latest

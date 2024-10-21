@@ -1,10 +1,10 @@
 _target_: depth_from_events.datamodule.UzhFpvDataModule
-root_dir: data/uzh_fpv_10ms_0.25ts_rect  # created with uzh_fpv.py
-train_seq_len: null
-train_crop: [2, 1, 258, 345]  # hw for random, tlbr or null for fixed
-val_crop: [2, 1, 258, 345]  # gives centered (256, 344)
-augmentations: null
+root_dir: data/uzh_fpv_10ms_crop[2, 13, 258, 333]_subs2_0.25ts_rect  # created with uzh_fpv.py
+train_seq_len: 100
+train_crop: null  # hw for random, tlbr or null for fixed
+val_crop: null  # gives centered (256, 344)
+augmentations: [flip_pol, flip_lr]  # no time and up-down flip
 return_events: true  # whether to include raw events alongside frames
-batch_size: 1
-shuffle: false
+batch_size: 8
+shuffle: true
 num_workers: 8

@@ -223,7 +223,7 @@ class FlightDataModule(LightningDataModule):
             # ("rosbag2_2024-10-03-20-48-17_0", 0, 4),
             # ("rosbag2_2024-10-03-20-56-06_0", 0, 4),
             # ("rosbag2_2024-10-15-13-30-31_0", 0, 4),
-            # ("rosbag2_2024-10-16-13-38-16_0", 120e6, 4),  # 2 minutes in us
+            # ("rosbag2_2024-10-16-13-38-16_0", 240e6, 4),  # 2 minutes in us
             # ("rosbag2_2024-10-17-09-08-24_0", 120e6, 4),  # 2 minutes in us
             # ("rosbag2_2024-10-17-09-12-27_0", 120e6, 4),  # 2 minutes in us
         ]

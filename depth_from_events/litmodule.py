@@ -87,6 +87,8 @@ class Train(LightningModule):
                     loss_fn(frame, aux, flow)
                 elif name in ["ea_smooth"]:
                     loss_fn(frame, disparity)
+                elif name in ["scale_consistency"]:
+                    loss_fn(disparity, pose, batch.K_rect)
 
                 # add to log if visualizing
                 if self.visualizing:

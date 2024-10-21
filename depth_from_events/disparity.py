@@ -58,7 +58,8 @@ class DisparityToFlow(nn.Module):
         transformation = self.get_transformation_matrix(axis_angle, translation)
 
         # convert disparity to depth
-        _, depth = self.disparity_to_depth(disparity)
+        # _, depth = self.disparity_to_depth(disparity)
+        depth = disparity
 
         # backproject depth maps to 3d points
         cam_points = self.backproject_depth(depth, inv_K_rect)

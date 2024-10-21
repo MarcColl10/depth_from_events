@@ -1,6 +1,6 @@
 import torch.nn as nn
 
-from .blocks import conv_encoder, flatten_decoder, LazyConvGru, upsample_decoder
+from .blocks import conv_encoder, flatten_decoder, LazyConvGru, LazyConvMinGru, upsample_decoder
 from .network_utils import NetworkWrapper
 
 
@@ -9,14 +9,19 @@ class FlowNetwork(nn.Module):
     Optical flow prediction network following ID-Net.
     """
 
-    def __init__(self, encoder_channels, memory_channels, decoder_channels, activation_fn, final_bias, scaling):
+    def __init__(
+        self, encoder_channels, memory_channels, decoder_channels, activation_fn, final_bias, padding_mode, scaling
+    ):
         super().__init__()
 
         self.scaling = scaling
 
-        self.encoder = conv_encoder(encoder_channels, activation_fn)
-        self.memory = LazyConvGru(memory_channels, 3)
-        self.decoder = upsample_decoder(decoder_channels, activation_fn, final_bias, mode="flow")
+        self.encoder = conv_encoder(encoder_channels, activation_fn, padding_mode=padding_mode)
+        self.memory = LazyConvGru(memory_channels, 3, padding_mode=padding_mode)
+        # self.memory = LazyConvMinGru(memory_channels, 3, padding_mode=padding_mode)
+        self.decoder = upsample_decoder(
+            decoder_channels, activation_fn, final_bias, padding_mode=padding_mode, mode="flow"
+        )
 
     def forward(self, input, hidden=None):
         encoder = self.encoder(input[:, :2])  # only polarity channels
@@ -46,6 +51,7 @@ class DisparityPoseNetwork(nn.Module):
 
         self.encoder = conv_encoder(encoder_channels, activation_fn, padding_mode=padding_mode)
         self.memory = LazyConvGru(memory_channels, 3, padding_mode=padding_mode)
+        # self.memory = LazyConvMinGru(memory_channels, 3, padding_mode=padding_mode)
         self.disp_decoder = upsample_decoder(
             decoder_channels, activation_fn, final_bias, padding_mode=padding_mode, mode="disparity"
         )

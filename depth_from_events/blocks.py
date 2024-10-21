@@ -38,6 +38,30 @@ class LazyConvGru(nn.Module):
         return hx
 
 
+class LazyConvMinGru(nn.Module):
+    """
+    From 'Were RNNs All We Needed?' by Feng et al., 2024.
+    Code adapted from https://github.com/lucidrains/minGRU-pytorch/blob/main/minGRU_pytorch/minGRU.py.
+    """
+
+    def __init__(self, out_channels, kernel_size, padding_mode="zeros"):
+        super().__init__()
+
+        self.out_channels = out_channels
+        padding = kernel_size // 2
+
+        self.ih = nn.LazyConv2d(2 * out_channels, kernel_size, padding=padding, padding_mode=padding_mode)
+
+    def forward(self, x, hx):
+        # compute hidden and gate
+        h_, z = self.ih(x).chunk(2, dim=1)
+        z = z.sigmoid()
+
+        # update hidden
+        hx = torch.lerp(hx, h_, z) if hx is not None else h_  # (1 - z) * hx + z * h_
+        return hx
+
+
 class Residual(nn.Sequential):
     """
     Residual block with connection from input to after.
@@ -126,19 +150,19 @@ def conv_encoder(out_channels, activation_fn, padding_mode="zeros"):
     - Head with large kernel
     - 2 pairs of residual blocks with stride
     """
-    padder = LazyPadder(8)
+    # padder = LazyPadder(8)
     head = feedforward(
-        nn.LazyConv2d(out_channels // 2, 7, stride=2, padding=3, padding_mode=padding_mode),
+        nn.LazyConv2d(out_channels // 4, 7, stride=2, padding=3, padding_mode=padding_mode),
         activation_fn(),
     )
     encoder = named_sequential(
         "conv",
         res_block(out_channels // 2, 3, activation_fn, stride=2, padding_mode=padding_mode),
-        res_block(out_channels // 2, 3, activation_fn, padding_mode=padding_mode),
+        # res_block(out_channels // 2, 3, activation_fn, padding_mode=padding_mode),
         res_block(out_channels, 3, activation_fn, stride=2, padding_mode=padding_mode),
-        res_block(out_channels, 3, activation_fn, padding_mode=padding_mode),
+        # res_block(out_channels, 3, activation_fn, padding_mode=padding_mode),
     )
-    return named_sequential("enc", padder, head, encoder)
+    return named_sequential("enc", head, encoder)
 
 
 def upsample_decoder(out_channels, activation_fn, final_bias, padding_mode="zeros", mode="flow"):
@@ -147,7 +171,7 @@ def upsample_decoder(out_channels, activation_fn, final_bias, padding_mode="zero
     and disparity (1-channel, sigmoid) decoder.
     """
     final_channels = 2 if mode == "flow" else 1
-    final_activation = nn.Identity() if mode == "flow" else nn.Sigmoid()
+    final_activation = nn.Identity() if mode == "flow" else nn.Softplus()
     decoder = named_sequential(
         "dec",
         feedforward(

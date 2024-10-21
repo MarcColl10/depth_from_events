@@ -1,0 +1,4 @@
+scale_consistency:
+  _target_: depth_from_events.scale_consistency.ScaleConsistency
+  accumulation_window: 10
+  weight: 0.05

@@ -12,15 +12,15 @@ import yaml
 
 
 UZH_FPV_TRAIN_RECORDINGS = [
-    # "indoor_forward_3_davis_with_gt",
-    # "indoor_forward_5_davis_with_gt",
-    # "indoor_forward_6_davis_with_gt",
-    # "indoor_forward_7_davis_with_gt",
-    # "indoor_forward_8_davis",
+    "indoor_forward_3_davis_with_gt",
+    "indoor_forward_5_davis_with_gt",
+    "indoor_forward_6_davis_with_gt",
+    "indoor_forward_7_davis_with_gt",
+    "indoor_forward_8_davis",
     "indoor_forward_9_davis_with_gt",
     # "indoor_forward_10_davis_with_gt",
-    # "indoor_forward_11_davis",
-    # "indoor_forward_12_davis",
+    "indoor_forward_11_davis",
+    "indoor_forward_12_davis",
 ]
 UZH_FPV_VAL_RECORDINGS = [
     "indoor_forward_10_davis_with_gt",

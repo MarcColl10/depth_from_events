@@ -93,7 +93,7 @@ def disparity_map_to_image(disparity, reverse=False):
     disparity = disparity.squeeze(0)  # remove channel
     disp_pixels = np.argwhere(disparity > 0)
     y, x = disp_pixels
-    disp_valid = disparity[y, x]
+    disp_valid = 1 / disparity[y, x]
     min_disp = disp_valid.min() if len(disp_valid) > 0 else 0
     max_disp = disp_valid.max() if len(disp_valid) > 0 else 0
 
