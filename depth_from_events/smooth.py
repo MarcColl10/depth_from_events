@@ -44,16 +44,17 @@ class EdgeAwareSmoothing(nn.Module):
             self.total_loss += pred_grad_y.mean() + pred_grad_x.mean()
 
             # temporal component
-            if i + 1 < self.passes:
-                next_event_frame = self.event_frames[i + 1][:, :2]
-                img_grad_t = (event_frame - next_event_frame).abs().mean(1, keepdim=True)
+            # TODO: shouldn't this be removed???
+            # if i + 1 < self.passes:
+            #     next_event_frame = self.event_frames[i + 1][:, :2]
+            #     img_grad_t = (event_frame - next_event_frame).abs().mean(1, keepdim=True)
 
-                next_pred_map = self.pred_maps[i + 1]
-                next_norm_pred_map = next_pred_map / (next_pred_map.mean((2, 3), keepdim=True) + 1e-9)
-                pred_grad_t = (norm_pred_map - next_norm_pred_map).abs()
+            #     next_pred_map = self.pred_maps[i + 1]
+            #     next_norm_pred_map = next_pred_map / (next_pred_map.mean((2, 3), keepdim=True) + 1e-9)
+            #     pred_grad_t = (norm_pred_map - next_norm_pred_map).abs()
 
-                pred_grad_t *= torch.exp(-img_grad_t)
-                self.total_loss += pred_grad_t.mean()
+            #     pred_grad_t *= torch.exp(-img_grad_t)
+            #     self.total_loss += pred_grad_t.mean()
 
         self.total_loss /= self.passes
         self.total_loss *= self.weight
