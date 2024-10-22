@@ -81,8 +81,6 @@ class DisparityPoseIntrinsicsNetwork(nn.Module):
     Disparity, pose and camera intrinsics prediction network following ID-Net.
     """
 
-    modality = "disparity"
-
     def __init__(self, encoder_channels, memory_channels, decoder_channels, activation_fn, final_bias, scaling):
         super().__init__()
 

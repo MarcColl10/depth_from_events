@@ -18,6 +18,7 @@ def main(overrides):
     # get training config and merge with overrides
     run = api.run(f"{project_path}/{overrides.runid}")
     config = OmegaConf.create(deepcopy(run.config))
+    config.pop("datamodule", None) if "datamodule" in overrides else None
     with open_dict(config):
         config.merge_with(overrides)
 
