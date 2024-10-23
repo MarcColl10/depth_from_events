@@ -7,6 +7,7 @@ import hdf5plugin
 import numpy as np
 import pandas as pd
 from rich.progress import track
+from scipy.spatial.transform import Rotation as R
 from torchvision.datasets.utils import download_and_extract_archive
 import yaml
 
@@ -289,6 +290,50 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, cro
                     h5f["events/y"] = h5f["events/y_rect"]
                     h5f["events/x"] = h5f["events/x_rect"]
                     del h5f["events/y_rect"], h5f["events/x_rect"]
+
+                # write pose gt
+                if (raw_dir / rec / "groundtruth.txt").exists():
+                    pose = pd.read_csv(
+                        raw_dir / rec / "groundtruth.txt",
+                        delimiter=" ",
+                        skiprows=1,
+                        names=["t", "tx", "ty", "tz", "qx", "qy", "qz", "qw"],
+                    )
+
+                    # interpolate pose to frame timestamps
+                    query_timestamps = h5f["events/t"][:][splits]
+
+                    interpolated_pose = dict()
+                    for key, value in pose.items():
+                        if key == "t":
+                            continue
+                        interpolated_pose[key] = np.interp(query_timestamps, pose["t"], value)
+                    interpolated_pose["t"] = query_timestamps
+                    interpolated_pose = pd.DataFrame(interpolated_pose)
+
+                    # compute delta poses
+                    poses = []
+                    for (_, pose_start), (_, pose_end) in track(
+                        zip(interpolated_pose[:-1].iterrows(), interpolated_pose[1:].iterrows()),
+                        description=f"Computing delta poses for {rec}...",
+                    ):
+                        # Compute delta translation
+                        delta_translation = pose_end[["tx", "ty", "tz"]].values - pose_start[["tx", "ty", "tz"]].values
+
+                        # Compute delta rotation
+                        q1 = pose_start[["qx", "qy", "qz", "qw"]].values
+                        q2 = pose_end[["qx", "qy", "qz", "qw"]].values
+                        r1 = R.from_quat(q1)
+                        r2 = R.from_quat(q2)
+                        delta_rotation = r2 * r1.inv()
+                        # delta_quat = delta_rotation.as_quat()
+                        delta_rotation_axis_angle = delta_rotation.as_rotvec()
+
+                        # assemble to 6D pose
+                        poses.append(np.concatenate([delta_translation, delta_rotation_axis_angle]))
+
+                    poses = np.stack(poses)
+                    h5f.create_dataset("poses", data=poses, chunks=True, dtype=np.float32, compression=None)
 
 
 if __name__ == "__main__":
