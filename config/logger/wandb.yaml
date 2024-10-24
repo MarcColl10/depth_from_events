@@ -1,5 +1,5 @@
 _target_: lightning.pytorch.loggers.WandbLogger
-entity: huizerd
+entity: dfe-cvpr25
 project: depth_from_events
 save_dir: logs
 log_model: all
