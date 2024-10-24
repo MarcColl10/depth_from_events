@@ -101,19 +101,40 @@ class FrameSequence:
         top, left, bottom, right = self.crop_corners
         frames = frames[..., top:bottom, left:right]
 
+        # get pose associated with each frame
+        if "poses" in self.h5:
+            poses = torch.from_numpy(self.h5["poses"][start:stop].astype(np.float32))
+            translation, rotation = poses[:, :3], poses[:, 3:]
+        else:
+            translation, rotation = None, None
+
         # apply augmentations
         if "flip_t" in self.augmentation:
             frames = frames.flip(0)
             if not self.return_events:
                 frames[:, 2:] = 1 - frames[:, 2:]  # revert avg ts in [0, 1]
+            if translation is not None:
+                translation = -translation
+                rotation = -rotation
         if "flip_pol" in self.augmentation:
             frames[:, :2] = frames[:, :2].flip(1)  # only neg, pos
             if not self.return_events:
                 frames[:, 2:] = frames[:, 2:].flip(1)  # flip avg ts
+            if translation is not None:
+                # nothing to do
+                pass
         if "flip_ud" in self.augmentation:
             frames = frames.flip(2)
+            if translation is not None:
+                # TODO: check if flipping x is correct
+                translation[:, 0] = -translation[:, 0]
+                rotation[:, 0] = -rotation[:, 0]
         if "flip_lr" in self.augmentation:
             frames = frames.flip(3)
+            if translation is not None:
+                # TODO: check if flipping y is correct
+                translation[:, 1] = -translation[:, 1]
+                rotation[:, 1] = -rotation[:, 1]
 
         # get events
         if self.return_events:
@@ -186,6 +207,8 @@ class FrameSequence:
         sample.eofs = [i == len(self.slice) - 1 for i in chunk]
         sample.K_rect = K_rect
         sample.inv_K_rect = inv_K_rect
+        if translation is not None:
+            sample.pose = torch.cat([translation, rotation], dim=-1)
 
         return sample
 

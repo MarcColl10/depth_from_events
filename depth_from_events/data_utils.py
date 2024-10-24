@@ -92,7 +92,7 @@ class ConcatBatchSampler(BatchSampler):
 def time_first_collate(batch):
     collated_batch = DotMap()
     for key in batch[0]:
-        if key in ["frames"]:
+        if key in ["frames", "pose"]:
             collated_batch[key] = torch.stack([sample[key] for sample in batch], dim=1)
         elif key in ["auxs"]:
             collated_batch[key] = DotMap()
