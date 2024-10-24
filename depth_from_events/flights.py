@@ -215,17 +215,13 @@ class FlightDataModule(LightningDataModule):
         # recordings
         # name, skip time in us at start, subsample
         recordings = [
-            ("rosbag2_2024-09-19-14-06-54_0", 0, None),
-            ("rosbag2_2024-09-19-14-09-21_0", 0, 2),
-            ("rosbag2_2024-09-19-14-12-10_0", 0, 4),
-            # ("rosbag2_2024-10-03-19-45-14_0", 0, 4),
-            # ("rosbag2_2024-10-03-19-55-33_0", 0, 4),
-            # ("rosbag2_2024-10-03-20-48-17_0", 0, 4),
-            # ("rosbag2_2024-10-03-20-56-06_0", 0, 4),
-            # ("rosbag2_2024-10-15-13-30-31_0", 0, 4),
-            # ("rosbag2_2024-10-16-13-38-16_0", 240e6, 4),  # 2 minutes in us
-            # ("rosbag2_2024-10-17-09-08-24_0", 120e6, 4),  # 2 minutes in us
-            # ("rosbag2_2024-10-17-09-12-27_0", 120e6, 4),  # 2 minutes in us
+            # ("rosbag2_2024-09-19-14-06-54_0", 0, None),
+            # ("rosbag2_2024-09-19-14-09-21_0", 0, 2),
+            # ("rosbag2_2024-09-19-14-12-10_0", 0, 4),
+            ("rosbag2_2024-10-22-09-13-46_0", 0, 4),  # hand, no floor
+            ("rosbag2_2024-10-22-09-37-55_0", 0, 4),  # hand, with floor
+            ("rosbag2_2024-10-22-09-50-30_0", 5e6, 4),  # flying, with floor
+            ("rosbag2_2024-10-22-09-52-43_0", 0, 4),  # flying, with floor
         ]
         self.recordings = [(r, t) for r, t, s in recordings if s == self.subsample]
 
@@ -272,21 +268,3 @@ class FlightDataModule(LightningDataModule):
 
     def val_dataloader(self):
         return self.dataloader("validate")
-
-
-if __name__ == "__main__":
-    from visualizer import RerunVisualizer
-
-    visualizer = RerunVisualizer("flights", "100.74.49.39:9876", False)
-    # sequence_full = FlightSequence("data/raw/flights", "rosbag2_2024-09-19-14-06-54_0", 10000)
-    # sequence_half = FlightSequence("data/raw/flights", "rosbag2_2024-09-19-14-09-21_0", 10000)
-    sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-09-19-14-12-10_0", 10000, subsample=4)
-    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-19-45-14_0", 10000, subsample=4)
-    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-19-55-33_0", 10000, subsample=4)
-    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-20-48-17_0", 10000, subsample=4)
-    # sequence_quarter = FlightSequence("data/raw/flights", "rosbag2_2024-10-03-20-56-06_0", 10000, subsample=4)
-
-    for chunk in sequence_quarter:
-        for frame in chunk.frames:
-            visualizer.set_counter()
-            visualizer.event_frame(frame)

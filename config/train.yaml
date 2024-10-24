@@ -20,5 +20,11 @@ defaults:
   - hydra: no_logging
   - _self_  # to disable warning
 
+wandb:
+  entity: dfe-cvpr25
+  project: depth_from_events
+
 stage: train
 name: ${stage}
+runid: null  # start from checkpoint
+checkpoint: null

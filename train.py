@@ -1,19 +1,27 @@
+from pathlib import Path
+
 import hydra
 from hydra.utils import instantiate
 from lightning import seed_everything
 from omegaconf import OmegaConf
+import torch
 import wandb
-
-
-# NOTE: no difference with this on 4090, but set to prevent warning?
-# sets torch.backends.cuda.matmul.allow_tf32 to true (matmuls)
-# toch.backends.cudnn.allow_tf32 is already true (convs)
-# torch.set_float32_matmul_precision("high")
-# torch.backends.cudnn.benchmark = True
 
 
 @hydra.main(version_base=None, config_path="config", config_name="train")
 def main(config):
+    # set to prevent warning
+    torch.set_float32_matmul_precision("high")
+
+    # get checkpoint if given
+    if config.runid is not None and config.checkpoint is not None:
+        api = wandb.Api()
+        project_path = f"{config.wandb.entity}/{config.wandb.project}"
+        checkpoint_path = f"{project_path}/model-{config.runid}:{config.checkpoint}"
+        checkpoint = Path(api.artifact(checkpoint_path).download()) / "model.ckpt"
+    else:
+        checkpoint = None
+
     # reproducibility
     if config.trainer.deterministic:
         seed_everything(42, workers=True)
@@ -25,14 +33,14 @@ def main(config):
     network = instantiate(config.network)
     transform = instantiate(config.transform)
     loss_functions = instantiate(config.loss_functions)
-    # network = torch.compile(network)
-    # network = torch.compile(network, mode="reduce-overhead")
-    # loss_functions["train"]["cmax"] = torch.compile(loss_functions["train"]["cmax"])
-    # loss_functions["validate"]["cmax"] = torch.compile(loss_functions["validate"]["cmax"])
-    # loss_functions["validate"]["rsat"] = torch.compile(loss_functions["validate"]["rsat"])
     optimizer = instantiate(config.optimizer)
     scheduler = instantiate(config.scheduler)
     litmodule = instantiate(config.litmodule, network, transform, loss_functions, optimizer, scheduler)
+
+    # load state dict from checkpoint
+    # lighting load_from_checkpoint is not transparent enough
+    if checkpoint is not None:
+        litmodule.load_state_dict(torch.load(checkpoint, weights_only=True, map_location="cpu")["state_dict"])
 
     # callbacks
     callbacks = instantiate(config.callbacks)
@@ -56,8 +64,6 @@ def main(config):
         enable_checkpointing=enable_checkpointing,
     )
     trainer.fit(litmodule, datamodule=datamodule)
-
-    # TODO: immediately validate/test/create videos
 
 
 if __name__ == "__main__":

@@ -2,13 +2,17 @@ from copy import deepcopy
 from pathlib import Path
 
 import hydra
-from hydra.utils import instantiate, get_class
+from hydra.utils import instantiate
 from omegaconf import OmegaConf, open_dict
+import torch
 import wandb
 
 
 @hydra.main(version_base=None, config_path="config", config_name="validate")  # only hydra config and overrides
 def main(overrides):
+    # set to prevent warning
+    torch.set_float32_matmul_precision("high")
+
     # get checkpoint
     api = wandb.Api()
     project_path = f"{overrides.wandb.entity}/{overrides.wandb.project}"
@@ -18,7 +22,8 @@ def main(overrides):
     # get training config and merge with overrides
     run = api.run(f"{project_path}/{overrides.runid}")
     config = OmegaConf.create(deepcopy(run.config))
-    config.pop("datamodule", None) if "datamodule" in overrides else None
+    for key in overrides.deletes:
+        config.pop(key, None)
     with open_dict(config):
         config.merge_with(overrides)
 
@@ -29,14 +34,10 @@ def main(overrides):
     network = instantiate(config.network)
     transform = instantiate(config.transform)
     loss_functions = instantiate(config.loss_functions)
-    litmodule = get_class(config.litmodule._target_).load_from_checkpoint(
-        checkpoint,
-        network=network,
-        transform=transform,
-        loss_functions=loss_functions,
-        optimizer=None,
-        scheduler=None,
-    )
+    litmodule = instantiate(config.litmodule, network, transform, loss_functions, optimizer=None, scheduler=None)
+    litmodule.load_state_dict(torch.load(checkpoint, weights_only=True, map_location="cpu")["state_dict"])
+    litmodule.eval()
+    litmodule.freeze()
 
     # callbacks
     callbacks = instantiate(config.callbacks)
