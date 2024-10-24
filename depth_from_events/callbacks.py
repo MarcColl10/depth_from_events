@@ -4,8 +4,8 @@ from .visualizer import ImageVisualizer, RerunVisualizer
 
 
 class LiveVisualizer(Callback):
-    def __init__(self, app_id, server, web, blueprint=None):
-        self.visualizer = RerunVisualizer(app_id, server, web, blueprint)
+    def __init__(self, app_id, server, web, compression, blueprint=None):
+        self.visualizer = RerunVisualizer(app_id, server, web, compression, blueprint)
 
     def on_batch_end(self, outputs):
         # update blueprint
@@ -44,8 +44,8 @@ class LiveVisualizer(Callback):
 
 
 class ImageLogger(Callback):
-    def __init__(self, root_dir, keys):
-        self.visualizer = ImageVisualizer(root_dir, keys)
+    def __init__(self, root_dir, keys, format):
+        self.visualizer = ImageVisualizer(root_dir, keys, format)
 
     def on_batch_end(self, outputs):
         for output in outputs.values():

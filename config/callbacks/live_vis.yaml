@@ -3,6 +3,7 @@ visualizer:
   app_id: ${...name}
   server: 100.74.49.39:9876  # replace with your ip
   web: false
+  compression: jpeg  # jpeg, png, false (to turn off)
 
 defaults:
   - blueprint@visualizer.blueprint: full_cmax

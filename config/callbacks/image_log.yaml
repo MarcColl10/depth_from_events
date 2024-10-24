@@ -7,3 +7,4 @@ visualizer:
     - ${stage}/cmax_image_warped_events_t
     - ${stage}/flow
     - ${stage}/disparity
+  format: png

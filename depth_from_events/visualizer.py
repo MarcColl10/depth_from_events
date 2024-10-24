@@ -17,10 +17,11 @@ class RerunVisualizer:
     Live visualizer using Rerun.
     """
 
-    def __init__(self, app_id, server, web, blueprint=None):
+    def __init__(self, app_id, server, web, compression, blueprint=None):
         rr.init(app_id)
         rr.serve() if web else rr.connect(server)
 
+        self.compression = compression
         self.counter = 0
         self.pose = (np.eye(3), np.zeros(3))
         self.linestrips = [np.zeros(3)]
@@ -46,15 +47,15 @@ class RerunVisualizer:
 
     def event_frame(self, frame, name="events"):
         image = event_frame_to_image(frame)
-        self.log_image(name, image, "jpeg")
+        self.log_image(name, image, self.compression)
 
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
-        self.log_image(name, image, "jpeg")
+        self.log_image(name, image, self.compression)
 
     def disparity_map(self, frame, name="disparity"):
         image = disparity_map_to_image(frame)
-        self.log_image(name, image, "jpeg")
+        self.log_image(name, image, self.compression)
 
     def pose_trajectory(self, pose, name="pose"):
         # https://rerun.io/docs/reference/types/archetypes/transform3d
@@ -87,8 +88,9 @@ class RerunVisualizer:
 
 
 class ImageVisualizer:
-    def __init__(self, root_dir, names):
+    def __init__(self, root_dir, names, format):
         self.root_dir = Path(root_dir)
+        self.format = format
         shutil.rmtree(self.root_dir) if self.root_dir.exists() else None
         for name in names:
             (self.root_dir / name).mkdir(exist_ok=True, parents=True)
@@ -98,19 +100,19 @@ class ImageVisualizer:
     def set_counter(self):
         self.counter += 1
 
-    def save_image(self, name, image, format):
+    def save_image(self, name, image):
         if (self.root_dir / name).exists():
             image = Image.fromarray(image)
-            image.save(self.root_dir / name / f"{self.counter:05d}.{format}")
+            image.save(self.root_dir / name / f"{self.counter:05d}.{self.format}")
 
     def event_frame(self, frame, name="events"):
         image = event_frame_to_image(frame)
-        self.save_image(name, image, "png")
+        self.save_image(name, image)
 
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
-        self.save_image(name, image, "png")
+        self.save_image(name, image)
 
     def disparity_map(self, frame, name="disparity"):
         image = disparity_map_to_image(frame)
-        self.save_image(name, image, "png")
+        self.save_image(name, image)

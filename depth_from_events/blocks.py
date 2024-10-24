@@ -158,11 +158,26 @@ def conv_encoder(out_channels, activation_fn, padding_mode="zeros"):
     encoder = named_sequential(
         "conv",
         res_block(out_channels // 2, 3, activation_fn, stride=2, padding_mode=padding_mode),
-        # res_block(out_channels // 2, 3, activation_fn, padding_mode=padding_mode),
         res_block(out_channels, 3, activation_fn, stride=2, padding_mode=padding_mode),
-        # res_block(out_channels, 3, activation_fn, padding_mode=padding_mode),
     )
     return named_sequential("enc", head, encoder)
+
+
+def conv_encoder2(out_channels, activation_fn, padding_mode="zeros"):
+    """
+    From Liu et al., 2023.
+    """
+    head = feedforward(
+        nn.LazyConv2d(out_channels // 4, 7, stride=2, padding=3, padding_mode=padding_mode),
+        activation_fn(),
+    )
+    pool = nn.MaxPool2d(3, stride=2, padding=1)
+    encoder = named_sequential(
+        "conv",
+        res_block(out_channels // 4, 3, activation_fn, padding_mode=padding_mode),
+        res_block(out_channels // 2, 3, activation_fn, stride=2, padding_mode=padding_mode),
+    )
+    return named_sequential("enc", head, pool, encoder)
 
 
 def upsample_decoder(out_channels, activation_fn, final_bias, padding_mode="zeros", mode="flow"):

@@ -92,10 +92,6 @@ class ContrastMaximization(nn.Module):
             accumulated_event_frame, _ = build_iwe(accumulated_events, 1, None, (h, w))  # (b, 2, d, h, w)
             return accumulated_event_frame.sum(2)
 
-    def get_accumulated_flow(self, tref):
-        # TODO: use extract_events?
-        pass
-
     def compute_iwe(self, tref):
         # get events and flow maps
         events, flow_maps = self.prepare_backward()

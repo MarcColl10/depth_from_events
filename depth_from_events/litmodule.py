@@ -28,9 +28,6 @@ class Train(LightningModule):
         if self.logger is not None:
             self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
 
-        # convert to channels last
-        # self.network.to(memory_format=torch.channels_last)
-
         # set visualization
         self.visualizing = any(
             [isinstance(cb, (callbacks.LiveVisualizer, callbacks.ImageLogger)) for cb in self.trainer.callbacks]
@@ -64,6 +61,7 @@ class Train(LightningModule):
                 elif len(yhat) == 3:
                     disparity, pose, _ = yhat
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
+                self.log(f"{stage}/depth_std", disparity.std(), batch_size=1)
             else:
                 disparity, pose = None, None
                 flow = yhat
@@ -97,8 +95,6 @@ class Train(LightningModule):
                             log[f"{stage}/{name}_accumulated_events"] = loss_fn.get_accumulated_events()
                             log[f"{stage}/{name}_image_warped_events_0"] = loss_fn.compute_iwe(0)
                             log[f"{stage}/{name}_image_warped_events_t"] = loss_fn.compute_iwe(loss_fn.passes)
-                            # log[f"{name}_accumulated_flow_fw"] += [loss_fn.get_accumulated_flow(loss_fn.passes)]
-                            # log[f"{name}_accumulated_flow_bw"] += [loss_fn.get_accumulated_flow(0)]
 
                 # backward if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
@@ -130,9 +126,6 @@ class Train(LightningModule):
                         elif stage == "validate" and value:
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
                             self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
-
-                # else:
-                #     self.network.detach()
 
             # reset if end of sequence
             if any(eof):

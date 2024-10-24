@@ -18,7 +18,7 @@ names:
   - validate/disparity
 i0: null
 i1: null
-fps: 25
+fps: 100
 cols: null
-resize: 1
+resize: 4
 bitrate: 10M
