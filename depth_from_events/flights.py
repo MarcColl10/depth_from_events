@@ -218,7 +218,7 @@ class FlightDataModule(LightningDataModule):
             # ("rosbag2_2024-09-19-14-06-54_0", 0, None),
             # ("rosbag2_2024-09-19-14-09-21_0", 0, 2),
             # ("rosbag2_2024-09-19-14-12-10_0", 0, 4),
-            ("rosbag2_2024-10-22-09-13-46_0", 0, 4),  # hand, no floor
+            # ("rosbag2_2024-10-22-09-13-46_0", 0, 4),  # hand, no floor
             ("rosbag2_2024-10-22-09-37-55_0", 0, 4),  # hand, with floor
             ("rosbag2_2024-10-22-09-50-30_0", 5e6, 4),  # flying, with floor
             ("rosbag2_2024-10-22-09-52-43_0", 0, 4),  # flying, with floor
