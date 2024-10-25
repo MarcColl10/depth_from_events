@@ -42,6 +42,10 @@ class Train(LightningModule):
         # unpack
         frames, auxs, eofs, rec = batch.frames, batch.auxs, batch.eofs, batch.recording
 
+        # if has gt pose
+        if "pose" in batch:
+            pose_gt = batch.pose
+
         # go over sequence
         log_seq = OrderedDict()
         for i, (frame, eof) in enumerate(zip(frames, eofs)):
@@ -76,6 +80,8 @@ class Train(LightningModule):
                 if self.transform is not None:
                     log[f"{stage}/disparity"] = disparity
                     log[f"{stage}/pose"] = pose
+                if pose_gt is not None:
+                    log["/pose_gt"] = pose_gt[i].unsqueeze(0)
 
             # go over loss functions
             loss = 0
