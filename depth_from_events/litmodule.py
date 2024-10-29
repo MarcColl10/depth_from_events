@@ -45,6 +45,8 @@ class Train(LightningModule):
         # if has gt pose
         if "pose" in batch:
             pose_gt = batch.pose
+        else:
+            pose_gt = None
 
         # go over sequence
         log_seq = OrderedDict()
