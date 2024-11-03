@@ -190,6 +190,7 @@ class FlightDataModule(LightningDataModule):
     def __init__(
         self,
         root_dir,
+        recordings,
         time_window,
         chunk_size,
         subsample,
@@ -202,6 +203,7 @@ class FlightDataModule(LightningDataModule):
         super().__init__()
 
         self.root_dir = Path(root_dir)
+        self.recordings = recordings
         self.time_window = time_window
         self.chunk_size = chunk_size
         self.subsample = subsample
@@ -214,16 +216,16 @@ class FlightDataModule(LightningDataModule):
     def prepare_data(self):
         # recordings
         # name, skip time in us at start, subsample
-        recordings = [
-            # ("rosbag2_2024-09-19-14-06-54_0", 0, None),
-            # ("rosbag2_2024-09-19-14-09-21_0", 0, 2),
-            # ("rosbag2_2024-09-19-14-12-10_0", 0, 4),
-            # ("rosbag2_2024-10-22-09-13-46_0", 0, 4),  # hand, no floor
+        all_recordings = [
+            ("rosbag2_2024-09-19-14-06-54_0", 0, None),
+            ("rosbag2_2024-09-19-14-09-21_0", 0, 2),
+            ("rosbag2_2024-09-19-14-12-10_0", 0, 4),
+            ("rosbag2_2024-10-22-09-13-46_0", 0, 4),  # hand, no floor
             ("rosbag2_2024-10-22-09-37-55_0", 0, 4),  # hand, with floor
             ("rosbag2_2024-10-22-09-50-30_0", 5e6, 4),  # flying, with floor
             ("rosbag2_2024-10-22-09-52-43_0", 0, 4),  # flying, with floor
         ]
-        self.recordings = [(r, t) for r, t, s in recordings if s == self.subsample]
+        self.recordings = [(r, t) for r, t, s in all_recordings if r in self.recordings and s == self.subsample]
 
         # set precision
         if str(self.precision) == "32":

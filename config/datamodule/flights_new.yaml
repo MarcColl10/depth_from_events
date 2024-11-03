@@ -1,0 +1,10 @@
+_target_: depth_from_events.datamodule.FlightsDataModule
+root_dir: data/flights
+train_seq_len: null
+train_crop: null
+val_crop: null
+augmentations: null
+return_events: true  # whether to include raw events alongside frames
+batch_size: 1
+shuffle: false
+num_workers: 8

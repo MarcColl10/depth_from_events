@@ -1,5 +1,10 @@
 _target_: depth_from_events.flights.FlightDataModule
 root_dir: data/raw/flights
+recordings:
+  - rosbag2_2024-10-22-09-13-46_0  # hand, no floor
+  - rosbag2_2024-10-22-09-37-55_0  # hand, with floor
+  - rosbag2_2024-10-22-09-50-30_0  # flying, with floor
+  - rosbag2_2024-10-22-09-52-43_0  # flying, with floor
 time_window: 20000  # 20ms in us
 chunk_size: 100
 subsample: 4  # filters recordings based on their subsampling; null = full image
