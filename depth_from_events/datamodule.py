@@ -208,7 +208,7 @@ class FrameSequence:
         sample.K_rect = K_rect
         sample.inv_K_rect = inv_K_rect
         if translation is not None:
-            sample.pose = torch.cat([translation, rotation], dim=-1)
+            sample.pose = torch.cat([rotation, translation], dim=-1)
 
         return sample
 
