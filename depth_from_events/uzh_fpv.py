@@ -292,9 +292,9 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, cro
                     del h5f["events/y_rect"], h5f["events/x_rect"]
 
                 # write pose gt
-                if (raw_dir / rec / "groundtruth.txt").exists():
+                if (raw_dir / rec / "groundtruth_corrected.txt").exists():
                     pose = pd.read_csv(
-                        raw_dir / rec / "groundtruth.txt",
+                        raw_dir / rec / "groundtruth_corrected.txt",
                         delimiter=" ",
                         skiprows=1,
                         names=["t", "tx", "ty", "tz", "qx", "qy", "qz", "qw"],
@@ -325,12 +325,14 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, cro
                         q2 = pose_end[["qx", "qy", "qz", "qw"]].values
                         r1 = R.from_quat(q1)
                         r2 = R.from_quat(q2)
-                        delta_rotation = r2 * r1.inv()
-                        # delta_quat = delta_rotation.as_quat()
+                        delta_rotation = r1.inv() * r2
                         delta_rotation_axis_angle = delta_rotation.as_rotvec()
 
+                        # delta translation in body frame
+                        delta_translation_body_frame = r1.apply(delta_translation, inverse=True)
+
                         # assemble to 6D pose
-                        poses.append(np.concatenate([delta_translation, delta_rotation_axis_angle]))
+                        poses.append(np.concatenate([delta_translation_body_frame, delta_rotation_axis_angle]))
 
                     poses = np.stack(poses)
                     h5f.create_dataset("poses", data=poses, chunks=True, dtype=np.float32, compression=None)
