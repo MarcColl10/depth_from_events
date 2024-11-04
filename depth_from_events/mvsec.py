@@ -188,9 +188,9 @@ class MvsecSequence:
 
             # make into event count frame
             # use unrectified coordinates, convert p to {0, 1}
-            y = torch.from_numpy(((p + 1) // 2).astype(np.int64))
+            y = torch.from_numpy(y.astype(np.int64))
             x = torch.from_numpy(x.astype(np.int64))
-            p = torch.from_numpy(p.astype(np.int64))
+            p = torch.from_numpy(((p + 1) // 2).astype(np.int64))
             frame = torch.zeros(2, *self.sensor_size, dtype=torch.int64)  # torch is faster
             frame.index_put_((p, y, x), torch.ones_like(p), accumulate=True)
 
