@@ -24,6 +24,7 @@ class FrameSequence:
     crop: tuple[int, ...] | None = None  # height, width or top, left, bottom, right
     augmentations: list[str] | None = None
     return_events: bool = False
+    require_gt_poses: bool = False
 
     def __post_init__(self):
         # open large h5 files only once
@@ -33,6 +34,15 @@ class FrameSequence:
 
         # get number of frames
         self.n_frames = len(self.h5["events/frames"])
+
+        # if require gt poses, restrict to frames with poses
+        if "poses" in self.h5 and self.require_gt_poses:
+            self.n_frames = self.h5["poses"].attrs["gt_pose_available_frames"]
+            self.i_start_frame = self.h5["poses"].attrs["gt_pose_start_idx"]
+            self.i_end_frame = self.h5["poses"].attrs["gt_pose_end_idx"]
+        else:
+            self.i_start_frame = 0
+            self.i_end_frame = self.n_frames
 
         # slice dataset, pre-compute crop and augmentations
         self.reset()
@@ -50,10 +60,10 @@ class FrameSequence:
 
     def init_slice(self):
         if self.seq_len:  # randomly-sliced sequence of seq_len
-            i_start = np.random.randint(0, self.n_frames - self.seq_len)
+            i_start = np.random.randint(self.i_start_frame, self.i_end_frame - self.seq_len)
             self.slice = list(range(i_start, i_start + self.seq_len))
         else:  # full sequence
-            self.slice = list(range(self.n_frames))
+            self.slice = list(range(self.i_start_frame, self.i_end_frame))
 
     def init_crop(self):
         if self.crop:
@@ -103,7 +113,9 @@ class FrameSequence:
 
         # get pose associated with each frame
         if "poses" in self.h5:
-            poses = torch.from_numpy(self.h5["poses"][start:stop].astype(np.float32))
+            poses = torch.from_numpy(
+                self.h5["poses"][start + self.i_start_frame : stop + self.i_start_frame].astype(np.float32)
+            )
             translation, rotation = poses[:, :3], poses[:, 3:]
         else:
             translation, rotation = None, None
@@ -222,6 +234,7 @@ class DataModule(LightningDataModule):
         val_crop,
         augmentations,
         return_events,
+        require_gt_poses,
         batch_size,
         shuffle,
         num_workers,
@@ -234,6 +247,7 @@ class DataModule(LightningDataModule):
         self.val_crop = val_crop
         self.augmentations = augmentations
         self.return_events = return_events
+        self.require_gt_poses = require_gt_poses
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.num_workers = num_workers
@@ -247,6 +261,7 @@ class DataModule(LightningDataModule):
                 crop=self.train_crop,
                 augmentations=self.augmentations,
                 return_events=self.return_events,
+                require_gt_poses=self.require_gt_poses,
             )
             recordings = []
             for rec in self.train_recordings:

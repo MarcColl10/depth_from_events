@@ -302,13 +302,18 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, cro
 
                     # interpolate pose to frame timestamps
                     query_timestamps = h5f["events/t"][:][splits]
+                    # limit timestamps to timespan where pose is available
+                    have_gt_pose = (pose["t"].iloc[0] <= query_timestamps) & (query_timestamps <= pose["t"].iloc[-1])
+                    gt_pose_start_idx = np.argmax(have_gt_pose)
+                    gt_pose_available_frames = np.sum(have_gt_pose)
+                    gt_pose_end_idx = gt_pose_start_idx + gt_pose_available_frames
 
                     interpolated_pose = dict()
                     for key, value in pose.items():
                         if key == "t":
                             continue
-                        interpolated_pose[key] = np.interp(query_timestamps, pose["t"], value)
-                    interpolated_pose["t"] = query_timestamps
+                        interpolated_pose[key] = np.interp(query_timestamps[have_gt_pose], pose["t"], value)
+                    interpolated_pose["t"] = query_timestamps[have_gt_pose]
                     interpolated_pose = pd.DataFrame(interpolated_pose)
 
                     # compute delta poses
@@ -335,7 +340,10 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, cro
                         poses.append(np.concatenate([delta_translation_body_frame, delta_rotation_axis_angle]))
 
                     poses = np.stack(poses)
-                    h5f.create_dataset("poses", data=poses, chunks=True, dtype=np.float32, compression=None)
+                    poses_h5 = h5f.create_dataset("poses", data=poses, chunks=True, dtype=np.float32, compression=None)
+                    poses_h5.attrs["gt_pose_start_idx"] = gt_pose_start_idx
+                    poses_h5.attrs["gt_pose_end_idx"] = gt_pose_end_idx
+                    poses_h5.attrs["gt_pose_available_frames"] = gt_pose_available_frames
 
 
 if __name__ == "__main__":

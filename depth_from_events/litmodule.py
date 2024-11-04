@@ -8,7 +8,7 @@ from . import callbacks
 
 
 class Train(LightningModule):
-    def __init__(self, network, transform, loss_functions, optimizer, scheduler):
+    def __init__(self, network, transform, loss_functions, optimizer, scheduler, override_pose):
         super().__init__()
 
         self.network = network
@@ -17,6 +17,7 @@ class Train(LightningModule):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.automatic_optimization = False  # manual because tbptt
+        self.override_pose = override_pose
 
     def setup(self, stage):
         # trace lazy modules if training (always for litmodule Train?)
@@ -75,6 +76,14 @@ class Train(LightningModule):
                     disparity, pose = yhat
                 elif len(yhat) == 3:
                     disparity, pose, _ = yhat
+
+                # override pose estimation if desired
+                if self.override_pose and pose_gt is not None:
+                    pose = pose_gt[i]
+                    yhat_list = list(yhat)
+                    yhat_list[1] = pose
+                    yhat = tuple(yhat_list)
+
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
                 self.log(f"{stage}/depth_std", disparity.std(), batch_size=1)
             else:

@@ -5,6 +5,7 @@ train_crop: null  # hw for random, tlbr or null for fixed
 val_crop: null  # gives centered (256, 344)
 augmentations: [flip_pol, flip_lr]  # no time and up-down flip
 return_events: true  # whether to include raw events alongside frames
+require_gt_poses: false
 batch_size: 8
 shuffle: true
 num_workers: 8

@@ -113,7 +113,7 @@ def time_first_collate(batch):
 
 def only_add_batch_dim(batch):
     for key in batch:
-        if key in ["frames"]:
+        if key in ["frames", "pose"]:
             batch[key] = batch[key].unsqueeze(1)
         elif key in ["auxs"]:
             for k in batch[key]:
