@@ -142,10 +142,7 @@ class FlightSequence:
                 frame = torch.from_numpy(frame.transpose(2, 0, 1))
 
             # discard if few events or same timestamp
-            if len(lst) < 10:
-                lst = np.array([], dtype=lst.dtype)
-                frame = torch.zeros_like(frame)
-            elif lst["t"][-1] == lst["t"][0]:
+            if len(lst) < 10 or lst["t"][-1] == lst["t"][0]:
                 lst = np.array([], dtype=lst.dtype)
                 frame = torch.zeros_like(frame)
 

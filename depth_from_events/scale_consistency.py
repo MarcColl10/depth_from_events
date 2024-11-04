@@ -12,6 +12,7 @@ class ScaleConsistency(nn.Module):
     Code adapted from https://github.com/JiawangBian/sc_depth_pl/blob/master/losses/loss_functions.py.
     TODO: make nice
     TODO: make more stable with 2-way warping and masking by valid?
+    TODO: reuse stuff from disparity.py
     """
 
     def __init__(self, accumulation_window, weight):
@@ -43,7 +44,8 @@ class ScaleConsistency(nn.Module):
             projection = (self.K_rect @ transformation)[:, :3, :]
 
             # backproject depth maps to 3d points
-            # TODO reuse from disparity.py
+            # NOTE: to prevent all the warnings, comment decorator in depth_to_3d function
+            # (warnings library to disable the warning wasn't working for me)
             b, _, h, w = depth_0.shape
             world_points = depth_to_3d(depth_0, self.K_rect)  # depth_to_3d_v2 has bug
             world_points = torch.cat([world_points, torch.ones_like(world_points[:, :1])], dim=1)

@@ -24,6 +24,15 @@ class Train(LightningModule):
             x = torch.zeros(self.trainer.datamodule.train_frame_shape, device=self.device)
             self.network.trace(x)
 
+        # NOTE: not helping!
+        # # compile network
+        # self.network = torch.compile(self.network, fullgraph=True, mode="reduce-overhead")
+
+        # # compile transform
+        # b, _, h, w = self.trainer.datamodule.train_frame_shape
+        # self.transform.init_grid(b, h, w, self.device, torch.float32)
+        # self.transform = torch.compile(self.transform, fullgraph=True, mode="reduce-overhead")
+
         # wandb model watching
         if self.logger is not None:
             self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)

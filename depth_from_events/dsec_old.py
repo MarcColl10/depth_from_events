@@ -68,12 +68,12 @@ class DsecSequence:
         fx, fy, cx, cy = cam_to_cam["intrinsics"]["cam0"]["camera_matrix"]  # distorted image
         K_dist = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
         fx, fy, cx, cy = cam_to_cam["intrinsics"]["camRect0"]["camera_matrix"]  # rectified image
-        self.K_rect = np.array([[fx, 0, cx, 0], [0, fy, cy, 0], [0, 0, 1, 0], [0, 0, 0, 1]])  # 4x4
+        self.K_rect = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
         R_rect = np.array(cam_to_cam["extrinsics"]["R_rect0"])
         dist_coeffs = np.array(cam_to_cam["intrinsics"]["cam0"]["distortion_coeffs"])
         resolution = cam_to_cam["intrinsics"]["cam0"]["resolution"]  # xy
         self.bw_rect_map, _ = cv2.initUndistortRectifyMap(
-            K_dist, dist_coeffs, R_rect, self.K_rect[:3, :3], resolution, cv2.CV_32FC2
+            K_dist, dist_coeffs, R_rect, self.K_rect, resolution, cv2.CV_32FC2
         )
 
         # get duration of recording
@@ -219,10 +219,7 @@ class DsecSequence:
             frame = frame[..., top:bottom, left:right]
 
             # discard if few events or same timestamp
-            if len(lst) < 10:
-                lst = np.array([], dtype=lst.dtype)
-                frame = torch.zeros_like(frame)
-            elif lst["t"][-1] == lst["t"][0]:
+            if len(lst) < 10 or lst["t"][-1] == lst["t"][0]:
                 lst = np.array([], dtype=lst.dtype)
                 frame = torch.zeros_like(frame)
 
@@ -258,7 +255,7 @@ class DsecSequence:
             frames = frames.flip(-1)
         if "polarity" in self.augmentation:
             events["p"] *= -1
-            frames[..., :2, :, :] = frames[..., :2, :, :].flip(-3)  # only flip polarity
+            frames = frames.flip(-3)  # only flip polarity
 
         # adapt camera matrices to crop, resize and augmentations
         K_rect = self.K_rect.copy()
@@ -500,7 +497,7 @@ class DsecDataModule(LightningDataModule):
             self.val_dataset,
             batch_size=None,
             shuffle=False,
-            num_workers=self.num_workers,
+            num_workers=self.num_workers // 2,
             collate_fn=only_add_batch_dim,
         )
 
@@ -509,33 +506,6 @@ class DsecDataModule(LightningDataModule):
             self.test_dataset,
             batch_size=None,
             shuffle=False,
-            num_workers=self.num_workers,
+            num_workers=self.num_workers // 2,
             collate_fn=only_add_batch_dim,
         )
-
-
-if __name__ == "__main__":
-    from rich.progress import track
-
-    datamodule = DsecDataModule(
-        root_dir="../occlusion_accretion_flow/data/datasets/DSEC",
-        time_window=10000,  # us
-        count_thresh=20000,
-        train_seq_len=100,
-        train_crop=(128, 128),
-        val_crop=None,
-        rectify=True,
-        augmentations=["backward", "vertical", "horizontal", "polarity"],
-        return_events=True,
-        batch_size=8,
-        shuffle=True,
-        num_workers=8,
-        download=False,
-    )
-    datamodule.prepare_data()
-    datamodule.setup("fit")
-    dataloader = datamodule.train_dataloader()
-
-    for _ in range(5):
-        for batch in track(dataloader):
-            pass
