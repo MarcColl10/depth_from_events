@@ -305,7 +305,7 @@ def get_uzh_fpv_h5_frames(root_dir, download_dir, time_window, count_window, cro
                     # limit timestamps to timespan where pose is available
                     have_gt_pose = (pose["t"].iloc[0] <= query_timestamps) & (query_timestamps <= pose["t"].iloc[-1])
                     gt_pose_start_idx = np.argmax(have_gt_pose)
-                    gt_pose_available_frames = np.sum(have_gt_pose)
+                    gt_pose_available_frames = np.sum(have_gt_pose) - 1  # - 1 because we need delta poses
                     gt_pose_end_idx = gt_pose_start_idx + gt_pose_available_frames
 
                     interpolated_pose = dict()

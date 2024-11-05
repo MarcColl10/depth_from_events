@@ -281,6 +281,7 @@ class DataModule(LightningDataModule):
                 root_dir=self.root_dir,
                 crop=self.val_crop,
                 return_events=self.return_events,
+                require_gt_poses=self.require_gt_poses,
             )
             self.val_dataset = ConcatDataset([sequence(recording=rec) for rec in self.val_recordings])
             channels = 2 if self.return_events else 4
