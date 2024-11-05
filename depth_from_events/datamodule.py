@@ -138,15 +138,19 @@ class FrameSequence:
         if "flip_ud" in self.augmentation:
             frames = frames.flip(2)
             if translation is not None:
-                # TODO: check if flipping x is correct
-                translation[:, 0] = -translation[:, 0]
+                # flip ud -> translation reverse y axis
+                translation[:, 1] = -translation[:, 1]
+                # flip ud -> rotation reverse x, z axis
                 rotation[:, 0] = -rotation[:, 0]
+                rotation[:, 2] = -rotation[:, 2]
         if "flip_lr" in self.augmentation:
             frames = frames.flip(3)
             if translation is not None:
-                # TODO: check if flipping y is correct
-                translation[:, 1] = -translation[:, 1]
+                # flip lr -> translation reverse x axis
+                translation[:, 0] = -translation[:, 0]
+                # flip lr -> rotation reverse y, z axis
                 rotation[:, 1] = -rotation[:, 1]
+                rotation[:, 2] = -rotation[:, 2]
 
         # get events
         if self.return_events:
