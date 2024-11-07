@@ -1,0 +1,4 @@
+_target_: depth_from_events.depth_disparity.DepthDisparityToFlow
+mode: depth
+min_depth: 0.1  # not used
+max_depth: 100  # not used

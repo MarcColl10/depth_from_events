@@ -8,7 +8,8 @@ from . import callbacks
 
 
 class Train(LightningModule):
-    def __init__(self, network, transform, loss_functions, optimizer, scheduler, override_pose):
+    # def __init__(self, network, transform, loss_functions, optimizer, scheduler, override_pose):
+    def __init__(self, network, transform, loss_functions, optimizer, scheduler):
         super().__init__()
 
         self.network = network
@@ -17,7 +18,7 @@ class Train(LightningModule):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.automatic_optimization = False  # manual because tbptt
-        self.override_pose = override_pose
+        # self.override_pose = override_pose
 
     def setup(self, stage):
         # trace lazy modules if training (always for litmodule Train?)
@@ -58,6 +59,12 @@ class Train(LightningModule):
         else:
             pose_gt = None
 
+        # if has targets
+        if "targets" in batch:
+            targets = batch.targets
+        else:
+            targets = None
+
         # go over sequence
         log_seq = OrderedDict()
         for i, (frame, eof) in enumerate(zip(frames, eofs)):
@@ -67,27 +74,31 @@ class Train(LightningModule):
             aux = DotMap({k: v[i] for k, v in auxs.items()})
 
             # forward network
-            # if flow net, this is flow; else (disparity, pose)
+            # if flow net, this is flow; else (depth/disparity, pose)
             yhat = self.network(frame)
 
             # transform network output
             if self.transform is not None:
                 if len(yhat) == 2:
-                    disparity, pose = yhat
+                    depth, pose = yhat
                 elif len(yhat) == 3:
-                    disparity, pose, _ = yhat
+                    depth, pose, _ = yhat
 
                 # override pose estimation if desired
-                if self.override_pose and pose_gt is not None:
-                    pose = pose_gt[i]
-                    yhat_list = list(yhat)
-                    yhat_list[1] = pose
-                    yhat = tuple(yhat_list)
+                # if self.override_pose and pose_gt is not None:
+                #     pose = pose_gt[i]
+                #     yhat_list = list(yhat)
+                #     yhat_list[1] = pose
+                #     yhat = tuple(yhat_list)
 
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
-                self.log(f"{stage}/depth_std", disparity.std(), batch_size=1)
+                if self.network.mode == "depth":
+                    disparity = self.transform.depth_to_disparity(depth)  # TODO: also scaling?
+                elif self.network.mode == "disparity":
+                    disparity, depth = self.transform.disparity_to_depth(depth)
+                self.log(f"{stage}/depth_std", depth.std(), batch_size=1)
             else:
-                disparity, pose = None, None
+                depth, disparity, pose = None, None, None
                 flow = yhat
 
             # log model prediction
@@ -102,6 +113,11 @@ class Train(LightningModule):
                     log[f"{stage}/pose"] = pose
                 if pose_gt is not None:
                     log["/pose_gt"] = pose_gt[i].unsqueeze(0)
+                if targets is not None:
+                    if targets[i].get("gt_depth") is not None:
+                        log["/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
+                    elif targets[i].get("gt_disparity") is not None:
+                        log["/disparity_gt"] = targets[i].gt_disparity
 
             # go over loss functions
             loss = 0
@@ -113,6 +129,11 @@ class Train(LightningModule):
                     loss_fn(frame, disparity)
                 elif name in ["scale_consistency"]:
                     loss_fn(disparity, pose, batch.K_rect)
+                elif targets and name in ["depth_disparity"]:
+                    if targets[i].get("gt_depth") is not None:
+                        loss_fn(frame, depth, targets[i].gt_depth)
+                    elif targets[i].get("gt_disparity") is not None:
+                        loss_fn(frame, disparity, targets[i].gt_disparity)
 
                 # add to log if visualizing
                 if self.visualizing:

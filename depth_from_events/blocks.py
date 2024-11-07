@@ -183,10 +183,15 @@ def conv_encoder2(out_channels, activation_fn, padding_mode="zeros"):
 def upsample_decoder(out_channels, activation_fn, final_bias, padding_mode="zeros", mode="flow"):
     """
     Select between flow (2-channel, identity)
-    and disparity (1-channel, sigmoid) decoder.
+    and depth/disparity (1-channel, softplus/sigmoid) decoder.
     """
     final_channels = 2 if mode == "flow" else 1
-    final_activation = nn.Identity() if mode == "flow" else nn.Softplus()
+    if mode == "flow":
+        final_activation = nn.Identity()
+    elif mode == "depth":
+        final_activation = nn.Softplus()
+    elif mode == "disparity":
+        final_activation = nn.Sigmoid()
     decoder = named_sequential(
         "dec",
         feedforward(

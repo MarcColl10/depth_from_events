@@ -73,14 +73,13 @@ def flow_map_to_image(frame):
     return frame_rgb
 
 
-def disparity_map_to_image(disparity, reverse=False):
+def disparity_map_to_image(disparity):
     """
-    Convert a disparity (or depth) map to an RGB image.
+    Convert a disparity map to an RGB image.
     Source: https://github.com/uzh-rpg/DSEC/blob/main/scripts/dataset/visualization.py
 
     Args:
         disparity (np.ndarray): Disparity map with shape (1, height, width).
-        reverse (bool): Whether to reverse the colormap (for depth maps).
 
     Returns:
         np.ndarray: RGB image of the disparity map.
@@ -93,13 +92,13 @@ def disparity_map_to_image(disparity, reverse=False):
     disparity = disparity.squeeze(0)  # remove channel
     disp_pixels = np.argwhere(disparity > 0)
     y, x = disp_pixels
-    disp_valid = 1 / disparity[y, x]
+    disp_valid = disparity[y, x]
     min_disp = disp_valid.min() if len(disp_valid) > 0 else 0
     max_disp = disp_valid.max() if len(disp_valid) > 0 else 0
 
     # disparity colormap (in reverse if depth map)
     norm = Normalize(vmin=min_disp, vmax=max_disp, clip=True)
-    mapper = cm.ScalarMappable(norm=norm, cmap="inferno" if not reverse else "inferno_r")
+    mapper = cm.ScalarMappable(norm=norm, cmap="inferno")
     disp_color = mapper.to_rgba(disp_valid)[..., :3]
     image = np.zeros((*disparity.shape, 3))
 

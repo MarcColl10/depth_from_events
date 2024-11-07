@@ -1,8 +1,8 @@
 defaults:
-  - datamodule: uzh_fpv
+  - datamodule: mvsec
   - litmodule: train
-  - network: disparity_pose
-  - transform: disparity_to_flow
+  - network: depth_pose
+  - transform: depth_to_flow
   - loss_functions@loss_functions.train:
     - cmax_iter
     # - ea_smooth
@@ -10,6 +10,7 @@ defaults:
   - loss_functions@loss_functions.validate:
     - cmax_iter
     - rsat
+    # - depth_disparity
   - optimizer: adam
   - scheduler: nothing
   - trainer: train

@@ -30,6 +30,7 @@ class MvsecSequence:
     crop: tuple[int, ...] | None = None  # height, width or top, left, bottom, right
     rectify: bool = False
     augmentations: list[str] | None = None
+    gt: list[str] | None = None
 
     def __post_init__(self):
         # defaults
@@ -47,9 +48,13 @@ class MvsecSequence:
         }
         assert all(p.exists() for p in paths.values())
 
+        # checks
+        assert not (self.augmentations is not None and self.gt)  # no augmentations on gt
+
         # open large h5 files only once
         self.fs = DotMap()
         self.fs.data = h5py.File(paths["data"], "r")
+        self.fs.gt = h5py.File(paths["gt"], "r")
 
         # forward rectification map
         # distorted -> rectified coords
@@ -153,7 +158,7 @@ class MvsecSequence:
         chunk = self.chunk_map[idx]
 
         # go over slices
-        events, frames, counts = [], [], []
+        events, frames, counts, targets = [], [], [], []
         for i in chunk:
             # convert to indices
             start = bisect_left(self.fs.data["davis/left/events"], self.t_start[i], key=lambda x: x[2])
@@ -215,10 +220,43 @@ class MvsecSequence:
             # only normalize time; polarity is already in {-1, 1}
             lst["t"] = (lst["t"] - lst["t"][0]) / (lst["t"][-1] - lst["t"][0]) if len(lst) else lst["t"]
 
+            # gt depth
+            if self.gt and "depth" in self.gt:
+                start = bisect_left(self.fs.gt["davis/left/depth_image_rect_ts"], self.t_start[i])
+                end = bisect_left(self.fs.gt["davis/left/depth_image_rect_ts"], self.t_end[i])
+                if end - start > 0:
+                    try:
+                        assert end - start == 1  # only one depth map per event_window
+                    except AssertionError:
+                        print(
+                            f"Multiple depth maps in event window {i}, taking latest"
+                        )  # happens with 20hz flow and gt time windows
+                        start = end - 1
+                    gt_depth_id = start + 1  # to prevent 0
+                    gt_depth = self.fs.gt["davis/left/depth_image_rect"][start:end]  # keep time dim as channel
+                    gt_depth[..., 192:, :] = 0  # remove car bonnet for car recordings
+                    if self.crop is not None:
+                        gt_depth = gt_depth[..., top:bottom, left:right]  # crop
+                    gt_depth[np.isnan(gt_depth)] = 0  # replace nans with 0
+                else:
+                    gt_depth = None
+                    gt_depth_id = None
+            else:
+                gt_depth = None
+                gt_depth_id = None
+
             # append
             events.append(lst)
             frames.append(frame)
             counts.append(len(lst))
+            # targets.gt_depth += [gt_depth]
+            # targets.gt_depth_id += [gt_depth_id]
+            targets.append(
+                DotMap(
+                    gt_depth=gt_depth,
+                    gt_depth_id=gt_depth_id,
+                )
+            )
 
         # stack and pad
         max_len = max(counts)
@@ -259,6 +297,12 @@ class MvsecSequence:
         events = torch.from_numpy(events)
         counts = torch.from_numpy(counts)
         auxs = DotMap(events=events, counts=counts)
+        targets = [
+            DotMap(
+                {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
+            )
+            for t in targets
+        ]
         K_rect = torch.from_numpy(K_rect.astype(np.float32))
         inv_K_rect = torch.from_numpy(inv_K_rect.astype(np.float32))
 
@@ -266,6 +310,8 @@ class MvsecSequence:
         sample = DotMap()
         sample.frames = frames.float()
         sample.auxs = auxs
+        if self.gt:
+            sample.targets = targets
         sample.recording = self.recording
         sample.eofs = [i == len(self.t_start) - 1 for i in chunk]
         sample.K_rect = K_rect
@@ -275,6 +321,8 @@ class MvsecSequence:
 
 
 class MvsecDataModule(LightningDataModule):
+    gt = ["depth"]
+
     def __init__(
         self,
         root_dir,
@@ -379,6 +427,7 @@ class MvsecDataModule(LightningDataModule):
                 time_window=self.time_window,
                 crop=self.val_crop,
                 rectify=True,
+                gt=self.gt,
             )
             self.val_dataset = ConcatDataset(
                 [val_sequence(recording=rec, time=time) for rec, time in zip(self.val_recordings, self.val_time)]

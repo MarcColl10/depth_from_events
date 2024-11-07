@@ -1,9 +1,0 @@
-_target_: depth_from_events.network.WrappedDisparityPoseIntrinsicsNetwork
-encoder_channels: 64
-memory_channels: 96
-decoder_channels: 96
-activation_fn:
-  _target_: torch.nn.ReLU
-  _partial_: true
-final_bias: true
-scaling: [1, 0.01, 1]  # disparity, pose, intrinsics

@@ -32,3 +32,6 @@ _args_:
           - _target_: rerun.blueprint.TimeSeriesView
             name: metrics
             origin: /
+          - _target_: rerun.blueprint.Spatial2DView
+            name: disparity_gt
+            origin: /disparity_gt

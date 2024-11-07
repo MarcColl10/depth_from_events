@@ -106,7 +106,7 @@ def time_first_collate(batch):
             collated_batch[key] = torch.stack([sample[key] for sample in batch])  # constant over time
         elif key in ["eofs"]:
             collated_batch[key] = list(zip(*[sample[key] for sample in batch]))
-        else:
+        else:  # recording, targets (none anyway)
             collated_batch[key] = [sample[key] for sample in batch]
     return collated_batch
 
@@ -118,6 +118,11 @@ def only_add_batch_dim(batch):
         elif key in ["auxs"]:
             for k in batch[key]:
                 batch[key][k] = batch[key][k].unsqueeze(1)
+        elif key in ["targets"]:
+            for i in range(len(batch[key])):
+                batch[key][i] = DotMap(
+                    {k: v.unsqueeze(0) if isinstance(v, torch.Tensor) else v for k, v in batch[key][i].items()}
+                )
         elif key in ["K_rect", "inv_K_rect"]:
             batch[key] = batch[key].unsqueeze(0)
         elif key in ["eofs"]:
