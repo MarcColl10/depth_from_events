@@ -23,7 +23,7 @@ from .data_utils import batched, ConcatBatchSampler, InfiniteDataLoader, only_ad
 class MvsecSequence:
     root_dir: str
     recording: str
-    time_window: float | None = None  # s
+    time_window: float  # s
     chunk_size: int = 100
     seq_len: int | None = None
     time: tuple[float, float] | None = None  # start, end

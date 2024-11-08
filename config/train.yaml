@@ -1,5 +1,5 @@
 defaults:
-  - datamodule: mvsec
+  - datamodule: flights
   - litmodule: train
   - network: depth_pose
   - transform: depth_to_flow

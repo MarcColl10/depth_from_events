@@ -297,7 +297,7 @@ class DsecSequence:
             events["p"] *= -1
             frames = frames.flip(-3)  # only flip polarity
 
-        # adapt camera matrices to crop, resize and augmentations
+        # adapt camera matrices to crop and augmentations
         K_rect = self.K_rect.copy()
         K_rect[0, 2] -= left
         K_rect[1, 2] -= top

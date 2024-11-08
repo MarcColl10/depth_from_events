@@ -1,6 +1,6 @@
 _target_: depth_from_events.mvsec.MvsecDataModule
 root_dir: data/raw/mvsec
-time_window: 0.02  # 25ms in s
+time_window: 0.02  # 20ms in s
 train_seq_len: 100
 train_recordings: [outdoor_day2]
 train_time: [[45, 650]]  # skip initial and final static part
