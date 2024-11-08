@@ -287,23 +287,12 @@ class FlightSequence:
         depth_height, depth_width = depth_image.shape
         dvx_height, dvx_width = dvx_size
 
-        # fake
-        # TODO: get realsense intrinsic matrix
-        K_depth = np.array(
-            [
-                [(depth_height + depth_width) / 2, 0, depth_width / 2],
-                [0, (depth_height + depth_width) / 2, depth_height / 2],
-                [0, 0, 1],
-            ],
-            dtype=np.float32,
-        )
+        # realsense rgb intrinsic matrix (because depth is aligned to rgb)
         K_depth = np.array(
             [[599.912109375, 0, 318.53460693359375], [0, 599.5509033203125, 247.19146728515625], [0, 0, 1]],
             dtype=np.float32,
-        )  # color
+        )
         # K_depth = np.array([[381.79150390625, 0, 322.4213562011719], [0, 381.79150390625, 234.92282104492188], [0, 0, 1]], dtype=np.float32)  # depth
-        # https://answers.ros.org/question/363236/intel-realsense-d435-intrinsic-parameters/
-        # K_depth = np.array([[322.282410, 0, 320.818268], [0, 322.282410, 178.779297], [0, 0, 1]], dtype=np.float32)
         R = np.eye(3, dtype=np.float32)
         t = np.array([-0.033, 0.0275, -0.006], dtype=np.float32).reshape(3, 1)  # in meters
 
