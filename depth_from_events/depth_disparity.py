@@ -180,6 +180,17 @@ class DepthDisparityMetrics(nn.Module):
         if gt_map is None:
             return
 
+        # or if we're doing evaluation without gt
+        elif isinstance(gt_map, int):
+            # compute differently scaled predictions
+            assert any([isinstance(scale, (int, float)) for scale in self.scales]), "need scale for eval"
+            for scale in self.scales:
+                if isinstance(scale, (int, float)):
+                    self.results[f"eval_{scale}"] = (gt_map, pred_map * scale)
+
+            self.passes += 1
+            return
+
         # compute different gt masks
         gt_masks = dict()
         gt_nonzero = gt_map.ne(0)  # mask by valid gt

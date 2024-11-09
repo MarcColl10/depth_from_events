@@ -262,6 +262,20 @@ class DsecSequence:
                 gt_disparity = None
                 gt_disparity_id = None
 
+            # eval disparity
+            if "eval_disparity_ts" in self.paths and "eval_disparity" in self.gt:
+                eval_disparity_ts = np.loadtxt(self.paths["eval_disparity_ts"], delimiter=",").astype(np.int64)
+                eval_disparity_ts, eval_disparity_id = eval_disparity_ts.T
+                start = bisect_left(eval_disparity_ts, self.t_start[i])
+                end = bisect_left(eval_disparity_ts, self.t_end[i])
+                if end - start > 0:
+                    assert end - start == 1
+                    eval_disparity_id = eval_disparity_id[start]
+                else:
+                    eval_disparity_id = None
+            else:
+                eval_disparity_id = None
+
             # append
             events.append(lst)
             frames.append(frame)
@@ -270,6 +284,7 @@ class DsecSequence:
                 DotMap(
                     gt_disparity=gt_disparity,
                     gt_disparity_id=gt_disparity_id,
+                    eval_disparity_id=eval_disparity_id,
                 )
             )
 
@@ -529,6 +544,7 @@ class DsecDataModule(LightningDataModule):
                 root_dir=self.root_dir,
                 time_window=self.time_window,
                 rectify=True,
+                gt=["eval_disparity"],
             )
             self.test_dataset = ConcatDataset([test_sequence(recording=rec) for rec in self.test_recordings])
             self.test_frame_shape = (

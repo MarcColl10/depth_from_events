@@ -134,6 +134,8 @@ class Train(LightningModule):
                         loss_fn(frame, depth, targets[i].gt_depth)
                     elif targets[i].get("gt_disparity") is not None:
                         loss_fn(frame, disparity, targets[i].gt_disparity)
+                    elif targets[i].get("eval_disparity_id") is not None:
+                        loss_fn(frame, disparity, targets[i].eval_disparity_id)
 
                 # add to log if visualizing
                 if self.visualizing:
@@ -172,7 +174,13 @@ class Train(LightningModule):
                             self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
                         elif stage == "validate" and value:
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
-                            self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
+                            self.log(f"{stage}/{name}/mean", value, batch_size=1)
+                        elif stage == "test" and value:
+                            if name == "depth_disparity" and isinstance(value[1], tuple):
+                                log["eval_disparity"] = value
+                            else:
+                                self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
+                                self.log(f"{stage}/{name}/mean", value, batch_size=1)
 
             # reset if end of sequence
             if any(eof):

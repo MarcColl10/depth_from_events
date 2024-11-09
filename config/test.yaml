@@ -1,0 +1,14 @@
+defaults:
+  - hydra: no_logging
+  - _self_
+
+wandb:
+  entity: dfe-cvpr25
+  project: depth_from_events
+
+stage: test
+name: ${stage}_${runid}_${checkpoint}
+runid: ???
+checkpoint: latest
+
+deletes: []
