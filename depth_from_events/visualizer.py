@@ -70,6 +70,12 @@ class RerunVisualizer:
         self.pose = (orientation, destination)
         self.linestrips.append(destination)
         rr.log(name, rr.LineStrips3D(np.stack(self.linestrips), radii=0.001))
+        rr.log(f"/{name}/translation/x", rr.Scalar(translation[0]))
+        rr.log(f"/{name}/translation/y", rr.Scalar(translation[1]))
+        rr.log(f"/{name}/translation/z", rr.Scalar(translation[2]))
+        rr.log(f"/{name}/rotation/x", rr.Scalar(axis_angle[0]))
+        rr.log(f"/{name}/rotation/y", rr.Scalar(axis_angle[1]))
+        rr.log(f"/{name}/rotation/z", rr.Scalar(axis_angle[2]))
 
     @staticmethod
     def log_image(name, image_nd_array, compression=False):

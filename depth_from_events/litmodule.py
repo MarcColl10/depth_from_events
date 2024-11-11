@@ -79,9 +79,9 @@ class Train(LightningModule):
 
                 # override pose estimation if desired
                 if self.override_pose and pose_gt is not None:
-                    pose = pose_gt[i]
+                    pose_override = pose_gt[i]
                     yhat_list = list(yhat)
-                    yhat_list[1] = pose
+                    yhat_list[1][:, :3] = pose_override[:, :3]  # hardcoded for now: override rotation only
                     yhat = tuple(yhat_list)
 
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
@@ -101,7 +101,7 @@ class Train(LightningModule):
                     log[f"{stage}/disparity"] = disparity
                     log[f"{stage}/pose"] = pose
                 if pose_gt is not None:
-                    log["/pose_gt"] = pose_gt[i].unsqueeze(0)
+                    log["/pose_gt"] = pose_gt[i]  # val requires remove of unsqueeze
 
             # go over loss functions
             loss = 0
