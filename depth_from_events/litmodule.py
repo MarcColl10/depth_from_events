@@ -8,7 +8,6 @@ from . import callbacks
 
 
 class Train(LightningModule):
-    # def __init__(self, network, transform, loss_functions, optimizer, scheduler, override_pose):
     def __init__(self, network, transform, loss_functions, optimizer, scheduler):
         super().__init__()
 
@@ -18,7 +17,6 @@ class Train(LightningModule):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.automatic_optimization = False  # manual because tbptt
-        # self.override_pose = override_pose
 
     def setup(self, stage):
         # trace lazy modules if training (always for litmodule Train?)
@@ -90,19 +88,37 @@ class Train(LightningModule):
                 #     yhat_list = list(yhat)
                 #     yhat_list[1] = pose
                 #     yhat = tuple(yhat_list)
+                if "gt_rotation" in aux:
+                    _, translation = pose.split([3, 3], dim=-1)
+                    # rmat = self.transform.rodrigues(angle)
+                    # angle = R.from_matrix(rmat.cpu().numpy()).as_euler("xyz", degrees=True)
+                    # angle = R.from_rotvec(axisangle.cpu().numpy()).as_euler("xyz", degrees=True)
+                    # gt_angle = R.from_rotvec(aux.gt_rotation.cpu().numpy()).as_euler("xyz", degrees=True)
+                    # gt_angle = aux.gt_rotation
+                    # gt_rmat = self.transform.rodrigues(gt_angle)
+                    # gt_angle = R.from_matrix(gt_rmat.cpu().numpy()).as_euler("xyz", degrees=True)
+                    pose = torch.cat([aux.gt_rotation, translation], dim=-1)
+                    yhat = tuple([yhat[0], pose])
+                    # log["/rotation_x"] = angle[:, 0].item()
+                    # log["/rotation_y"] = angle[:, 1].item()
+                    # log["/rotation_z"] = angle[:, 2].item()
+                    # log["/rotation_gt_x"] = gt_angle[:, 0].item()
+                    # log["/rotation_gt_y"] = gt_angle[:, 1].item()
+                    # log["/rotation_gt_z"] = gt_angle[:, 2].item()
 
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
                 if self.network.mode == "depth":
+                    # depth = self.transform.clip_depth(depth)
                     disparity = self.transform.depth_to_disparity(depth)  # TODO: also scaling?
                 elif self.network.mode == "disparity":
                     disparity, depth = self.transform.disparity_to_depth(depth)
-                self.log(f"{stage}/depth_std", depth.std(), batch_size=1)
+                self.log(f"{stage}/depth_std", depth.std(), batch_size=1, prog_bar=True)
             else:
                 depth, disparity, pose = None, None, None
                 flow = yhat
 
             # log model prediction
-            self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1)
+            self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1, prog_bar=True)
 
             # add to log if visualizing
             if self.visualizing:
@@ -180,7 +196,7 @@ class Train(LightningModule):
                                 log["eval_disparity"] = value
                             else:
                                 self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
-                                self.log(f"{stage}/{name}/mean", value, batch_size=1)
+                                self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
 
             # reset if end of sequence
             if any(eof):

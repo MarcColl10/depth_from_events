@@ -1,15 +1,15 @@
 _target_: depth_from_events.flights.FlightDataModule
 root_dir: data/raw/flights
 time_window: 20000  # 20ms in s
-train_seq_len: 100
+train_seq_len: null
 train_recordings: null
 train_crop: null  # hw for random, tlbr or null for fixed
 val_recordings: null
 val_crop: null
 rectify: true
-augmentations: [polarity, horizontal]
+augmentations: null
 return_rotations: false  # override for pose
 return_events: true  # always
-batch_size: 8
-shuffle: true
+batch_size: 1
+shuffle: false
 num_workers: 8

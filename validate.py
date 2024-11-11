@@ -38,12 +38,12 @@ def main(overrides):
     state_dict = torch.load(checkpoint, weights_only=True, map_location="cpu")["state_dict"]
     if "state_dict_maps" in overrides:  # temporary
         new_state_dict = {}
-        for before, after in overrides.state_dict_maps.items():
-            for key in state_dict:
+        for key in state_dict:
+            new_key = key
+            for before, after in config.state_dict_maps.items():
                 if before in key:
-                    new_state_dict[key.replace(before, after)] = state_dict[key]
-                else:
-                    new_state_dict[key] = state_dict[key]
+                    new_key = new_key.replace(before, after)
+            new_state_dict[new_key] = state_dict[key]
         state_dict = new_state_dict
     litmodule.load_state_dict(state_dict)
     litmodule.eval()

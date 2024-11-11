@@ -1,7 +1,7 @@
 _target_: lightning.Trainer
 accelerator: gpu
-max_epochs: 50
-check_val_every_n_epoch: 5
+max_epochs: 10
+check_val_every_n_epoch: 1
 limit_val_batches: null  # evaluate on all validation data; set to int for N batches
 num_sanity_val_steps: 0  # TODO: to deal with this we need to reset model after sanity/validation epoch
 log_every_n_steps: 10  # every n batches

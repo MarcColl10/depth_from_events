@@ -43,11 +43,23 @@ def main(config):
     # torch.backends.cudnn.benchmark = False
 
     # dataset and dataloader
-    dataset = instantiate(config.dataset, dtype=dtype)
+    dataset = instantiate(config.dataset)
     dataloader = instantiate(config.dataloader, dataset)
 
     # network, trace to get parameter shapes of lazy modules
     network = instantiate(config.network)
+    if config.checkpoint is not None:
+        state_dict = torch.load(config.checkpoint, weights_only=True, map_location="cpu")["state_dict"]
+        if "state_dict_maps" in config:  # temporary
+            new_state_dict = {}
+            for key in state_dict:
+                new_key = key
+                for before, after in config.state_dict_maps.items():
+                    if before in key:
+                        new_key = new_key.replace(before, after)
+                new_state_dict[new_key] = state_dict[key]
+            state_dict = new_state_dict
+        network.load_state_dict(state_dict)
     network.to(device, dtype)
     # with torch.no_grad():
     #     _, memory = network(torch.zeros(1, 2, *dataset.sensor_size, device=device, dtype=dtype))
@@ -149,7 +161,8 @@ def main(config):
                         writer.add_scalar("loss", loss_val, global_step)
                         if global_step % 1000 == 0:
                             event_image = event_frame_to_image(frame[0].cpu())
-                            disparity_image = disparity_map_to_image(yhat[0][0].detach().cpu())
+                            disparity = transform.depth_to_disparity(transform.clip_depth(yhat[0][0].detach().cpu()))
+                            disparity_image = disparity_map_to_image(disparity)
                             flow_image = flow_map_to_image(flow[0].detach().cpu())
                             writer.add_image("events", event_image, global_step, dataformats="HWC")
                             writer.add_image("disparity", disparity_image, global_step, dataformats="HWC")

@@ -3,5 +3,5 @@ depth_disparity:
   metrics: [mae]  # mae, rmse, rmse_log, silog, abs_rel, sq_rel, d1_acc, d2_acc, d3_acc
   scales: [median]  # median scales pred by gt median/pred median, float or int scales by fixed value, null disables
   # clamps: [[7, 80], [3, 30]]  # [7, 80] for dsec, [3, 30] for mvsec outdoor_day1
-  mask_by_events: [true, false]  # mask by events, true for mvsec depth
-  cut_offs: [10, 20, 30, null]  # in meters (10, 20, 30 for mvsec) or null (dsec), for mae
+  mask_by_events: [false]  # mask by events, true for mvsec depth
+  cut_offs: [null]  # in meters (10, 20, 30 for mvsec) or null (dsec), for mae

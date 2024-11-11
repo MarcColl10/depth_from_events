@@ -10,11 +10,12 @@ hydra:
 dataset:
   _target_: depth_from_events.flights.FlightSequence
   root_dir: data/raw/flights
-  recording: rosbag2_2024-10-14-18-22-53_0
-  time_window: 10000  # 10ms in us
+  recording: rosbag2_2024-11-01-12-05-04_0
+  time_window: 20000  # 20ms in us
   chunk_size: 100
-  drop_last: true
-  subsample: 4  # belongs to this recording
+  drop_last_chunk: true
+  time: [16000000, 510000000]
+  rectify: true
 
 dataloader:
   _target_: torch.utils.data.DataLoader
@@ -26,7 +27,7 @@ dataloader:
     _partial_: true
 
 # network:
-#   _target_: network.DisparityPoseNetwork
+#   _target_: network.DepthPoseNetwork
 #   _convert_: object
 #   encoder_channels: 64
 #   memory_channels: 64
@@ -39,8 +40,9 @@ dataloader:
 #   scaling: [1, 0.01]  # disparity, pose
 
 network:
-  _target_: depth_from_events.network.WrappedDisparityPoseNetwork  # TODO: unwrapped not faster?
+  _target_: depth_from_events.network.WrappedDepthPoseNetwork  # TODO: unwrapped not faster?
   _convert_: object
+  mode: depth
   encoder_channels: 64
   memory_channels: 64
   decoder_channels: 64
@@ -49,23 +51,13 @@ network:
     _partial_: true 
   final_bias: false
   padding_mode: reflect
-  scaling: [1, 0.01]  # disparity, pose
-
-# network:
-#   _target_: network.WrappedFlowNetwork
-#   encoder_channels: 64
-#   memory_channels: 64
-#   decoder_channels: 64
-#   activation_fn:
-#     _target_: torch.nn.ReLU
-#     _partial_: true
-#   final_bias: true
-#   scaling: 32
+  scaling: [1, 0.01]  # depth, pose
 
 transform:
-  _target_: depth_from_events.disparity.DisparityToFlow
-  min_depth: 0.1
-  max_depth: 100  # TODO: unrealistic for indoor?
+  _target_: depth_from_events.depth_disparity.DepthDisparityToFlow
+  mode: depth
+  min_depth: 0.1  # not used
+  max_depth: 100  # not used
 
 loss_function:
   _target_: depth_from_events.cmax.IterativeContrastMaximization
@@ -78,11 +70,14 @@ loss_function:
 
 optimizer:
   _target_: torch.optim.Adam
-  lr: 1.e-4
+  lr: 1.e-5
 
 trainer:
-  n_steps: 60000  # 60k steps at 100 Hz = 10 minutes
+  n_steps: 24000  # 24k steps at 50 Hz = 8 minutes
   clip_grad:
     _target_: torch.nn.utils.clip_grad_norm_  # TODO: does this work?
     _partial_: true
     max_norm: 1.0
+
+checkpoint: logs/depth_from_events/a2a4gwea/checkpoints/epoch=49-step=35000.ckpt
+state_dict_maps: {network.: "", disp_decoder: depth_decoder}

@@ -10,6 +10,7 @@ import hdf5plugin
 from lightning import LightningDataModule
 import numpy as np
 import numpy.lib.recfunctions as rfn
+from scipy.spatial.transform import Rotation as R
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 
@@ -22,11 +23,13 @@ class FlightSequence:
     recording: str
     time_window: int  # us
     chunk_size: int = 100
+    drop_last_chunk: bool = False
     seq_len: int | None = None
     time: tuple[int, int] | None = None
     crop: tuple[int, ...] | None = None  # height, width or top, left, bottom, right
     rectify: bool = False
     augmentations: list[str] | None = None
+    return_rotations: bool = False
     gt: list[str] | None = None
 
     def __post_init__(self):
@@ -72,7 +75,7 @@ class FlightSequence:
         # mapping from chunks to single steps
         # match seq_len if given
         self.chunk_size = self.seq_len if self.seq_len is not None else self.chunk_size
-        self.chunk_map = batched(range(len(self.t_start)), self.chunk_size)
+        self.chunk_map = batched(range(len(self.t_start)), self.chunk_size, drop_last=self.drop_last_chunk)
 
     def init_slice(self):
         if self.seq_len is not None:  # randomly-sliced sequence of seq_len
@@ -122,7 +125,7 @@ class FlightSequence:
         chunk = self.chunk_map[idx]
 
         # go over slices
-        events, frames, counts, targets = [], [], [], []
+        events, frames, counts, rotations, targets = [], [], [], [], []
         for i in chunk:
             # convert to indices
             start = bisect_left(self.h5["events/t"], self.t_start[i])
@@ -181,6 +184,23 @@ class FlightSequence:
             # after cropping, else normalized timestamp not correct
             lst["t"] = (lst["t"] - lst["t"][0]) / (lst["t"][-1] - lst["t"][0]) if len(lst) else lst["t"]
             lst["p"] = lst["p"] * 2 - 1
+
+            # rotations
+            # integrate angular vel to get rotation
+            if self.return_rotations:
+                start = bisect_left(self.h5["gt/imu_ts"], self.t_start[i])
+                end = bisect_left(self.h5["gt/imu_ts"], self.t_end[i])
+                if end - (start + 1) > 0:
+                    rotation = R.identity()
+                    for j in range(start + 1, end):
+                        omega = self.h5["gt/imu_omega"][j]
+                        omega *= np.array([-1, 1, -1])  # imu to camera frame
+                        dt = (self.h5["gt/imu_ts"][j] - self.h5["gt/imu_ts"][j - 1]) * 1e-6  # us to s
+                        rotation = rotation * R.from_rotvec(omega * dt)
+                    rotation = rotation.as_rotvec()
+                else:
+                    rotation = R.identity().as_rotvec()
+                rotations.append(rotation)
 
             # gt depth
             if self.gt and "depth" in self.gt:
@@ -256,6 +276,9 @@ class FlightSequence:
         events = torch.from_numpy(events)
         counts = torch.from_numpy(counts)
         auxs = DotMap(events=events, counts=counts)
+        if self.return_rotations:
+            rotations = torch.from_numpy(np.stack(rotations).astype(np.float32))
+            auxs.gt_rotation = rotations
         targets = [
             DotMap(
                 {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
@@ -353,6 +376,7 @@ class FlightDataModule(LightningDataModule):
         val_crop,
         rectify,
         augmentations,
+        return_rotations,
         return_events,
         batch_size,
         shuffle,
@@ -369,6 +393,7 @@ class FlightDataModule(LightningDataModule):
         self.val_crop = val_crop
         self.rectify = rectify
         self.augmentations = augmentations
+        self.return_rotations = return_rotations
         self.return_events = return_events
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -377,8 +402,10 @@ class FlightDataModule(LightningDataModule):
     def prepare_data(self):
         # recordings
         # name, time (start, stop)
-        train_recordings = [("rosbag2_2024-11-01-11-13-10_0", None)]
-        val_recordings = [("rosbag2_2024-11-01-11-13-10_0", None)]
+        # train: long sequence (8 minutes)
+        # validate: short sequence (4 minutes)
+        train_recordings = [("rosbag2_2024-11-01-12-05-04_0", (int(16e6), int(510e6)))]
+        val_recordings = [("rosbag2_2024-11-01-11-13-10_0", (int(10e6), int(250e6)))]
         self.train_recordings = train_recordings if self.train_recordings is None else self.train_recordings
         self.val_recordings = val_recordings if self.val_recordings is None else self.val_recordings
 
@@ -392,6 +419,7 @@ class FlightDataModule(LightningDataModule):
                 crop=self.train_crop,
                 rectify=self.rectify,
                 augmentations=self.augmentations,
+                return_rotations=self.return_rotations,
             )
             train_recordings = []
             for rec, time in self.train_recordings:
@@ -409,6 +437,7 @@ class FlightDataModule(LightningDataModule):
                 time_window=self.time_window,
                 crop=self.val_crop,
                 rectify=True,
+                return_rotations=self.return_rotations,
                 gt=self.gt,
             )
             self.val_dataset = ConcatDataset(

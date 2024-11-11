@@ -59,6 +59,7 @@ class DepthDisparityToFlow(nn.Module):
         if self.mode == "disparity":
             _, depth = self.disparity_to_depth(disparity)
         else:
+            # depth = self.clip_depth(disparity)
             depth = disparity
 
         # backproject depth maps to 3d points
@@ -71,6 +72,9 @@ class DepthDisparityToFlow(nn.Module):
         flow = -(new_pix_coords - self.grid)
 
         return flow
+
+    def clip_depth(self, depth):
+        return depth.clamp(self.min_depth, self.max_depth)
 
     def project_3d(self, cam_points, transformation, K_rect):
         """

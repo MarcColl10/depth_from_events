@@ -1,5 +1,5 @@
 defaults:
-  - datamodule: flights
+  - datamodule: flights_single
   - litmodule: train
   - network: depth_pose
   - transform: depth_to_flow
@@ -10,7 +10,7 @@ defaults:
   - loss_functions@loss_functions.validate:
     - cmax_iter
     - rsat
-    # - depth_disparity
+    - depth_disparity
   - optimizer: adam
   - scheduler: nothing
   - trainer: train

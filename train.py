@@ -40,7 +40,17 @@ def main(config):
     # load state dict from checkpoint
     # lighting load_from_checkpoint is not transparent enough
     if checkpoint is not None:
-        litmodule.load_state_dict(torch.load(checkpoint, weights_only=True, map_location="cpu")["state_dict"])
+        state_dict = torch.load(checkpoint, weights_only=True, map_location="cpu")["state_dict"]
+        if "state_dict_maps" in config:  # temporary
+            new_state_dict = {}
+            for key in state_dict:
+                new_key = key
+                for before, after in config.state_dict_maps.items():
+                    if before in key:
+                        new_key = new_key.replace(before, after)
+                new_state_dict[new_key] = state_dict[key]
+            state_dict = new_state_dict
+        litmodule.load_state_dict(state_dict)
 
     # callbacks
     callbacks = instantiate(config.callbacks)
