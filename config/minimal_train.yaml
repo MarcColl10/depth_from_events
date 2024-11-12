@@ -79,5 +79,6 @@ trainer:
     _partial_: true
     max_norm: 1.0
 
-checkpoint: logs/depth_from_events/a2a4gwea/checkpoints/epoch=49-step=35000.ckpt
+checkpoint: depth_from_events/uzhfpv_pretrained_a2a4gwea.ckpt
+cuda_compile_dict: "depth_from_events/cuda_compile_dict.pt"
 state_dict_maps: {network.: "", disp_decoder: depth_decoder}

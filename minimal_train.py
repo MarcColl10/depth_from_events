@@ -21,6 +21,7 @@ Some comments:
 - On Orin: 40s for 6400 network forwards including learning, so ~160 Hz, varying GPU utilization, between 60-100%
 """
 
+torch.serialization.add_safe_globals([DotMap])
 
 # from https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
 def flatten_dict(dictionary, parent_key=""):
@@ -110,43 +111,39 @@ def main(config):
         TimeRemainingColumn(elapsed_when_finished=True),
     ]
 
+    
+    cuda_compile_dict = torch.load(config.cuda_compile_dict, weights_only=True)
+    frames = cuda_compile_dict["frames"]
+    auxs = cuda_compile_dict["auxs"]
+    K_rect = cuda_compile_dict["K_rect"]
+    inv_K_rect = cuda_compile_dict["inv_K_rect"]
+    
+            # loop over steps in chunk
+    for j, frame in enumerate(frames):
+        # get auxiliary: events and counts
+        aux = DotMap({k: v[j] for k, v in auxs.items()})
 
-    # Go through first X batches and backward to let CUDA graph compile
-    for i, batch in enumerate(dataloader):
-        if i >= 1:
-            break
-        print(f"Compiling CUDA graph")
-        frames, auxs = batch.frames, batch.auxs
-        frames = frames.to(device, dtype)
-        auxs = DotMap(events=auxs.events.to(device, dtype), counts=auxs.counts.to(device))  # integer counts
-        K_rect = batch.K_rect.to(device, dtype)
-        inv_K_rect = batch.inv_K_rect.to(device, dtype)
+        # forward network
+        # disparity net, so (disparity, pose)
+        yhat = network(frame)
 
-        # loop over steps in chunk
-        for j, frame in enumerate(frames):
-            # get auxiliary: events and counts
-            aux = DotMap({k: v[j] for k, v in auxs.items()})
+        # transform to flow
+        flow = transform(yhat, K_rect, inv_K_rect)
 
-            # forward network
-            # disparity net, so (disparity, pose)
-            yhat = network(frame)
+        # forward loss function
+        loss_function(frame, aux, flow)
 
-            # transform to flow
-            flow = transform(yhat, K_rect, inv_K_rect)
-
-            # forward loss function
-            loss_function(frame, aux, flow)
-
-            # backward if enough passes
-            # detach network after optimizer step (tbptt)
-            if loss_function.passes == loss_function.accumulation_window:
-                loss = loss_function.backward()
-                if loss is not None:
-                    optimizer.zero_grad()
-                    loss.backward()
-                    clip_grad(network.parameters())
-                    network.detach()
-                loss_val = loss_function.compute_and_reset().get("cmax", 0)
+        # backward if enough passes
+        # detach network after optimizer step (tbptt)
+        if loss_function.passes == loss_function.accumulation_window:
+            loss = loss_function.backward()
+            if loss is not None:
+                optimizer.zero_grad()
+                loss.backward()
+            
+                clip_grad(network.parameters())
+                network.detach()
+            loss_val = loss_function.compute_and_reset().get("cmax", 0)
 
     print("Finished the CUDA graph, resetting dataloader and network states")
 
