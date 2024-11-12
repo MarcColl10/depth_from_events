@@ -12,10 +12,11 @@ class DepthDisparityToFlow(nn.Module):
     https://github.com/google-research/google-research/blob/master/depth_and_motion_learning/intrinsics_utils.py.
     """
 
-    def __init__(self, mode, min_depth, max_depth):
+    def __init__(self, mode, min_depth, max_depth, static=False):
         super().__init__()
 
         self.mode = mode
+        self.backproject_depth = self.backproject_depth_static if static else self.backproject_depth_dynamic
         self.min_depth, self.max_depth = min_depth, max_depth
         self.height, self.width = 0, 0
 
@@ -90,14 +91,21 @@ class DepthDisparityToFlow(nn.Module):
 
         return new_pix_coords
 
-    def backproject_depth(self, depth, inv_K_rect):
+    def backproject_depth_dynamic(self, depth, inv_K_rect):
         """
         Backproject depth maps to 3d points.
         """
         # initialize
         b, _, h, w = depth.shape
-        # if self.height != h or self.width != w:
-        #     self.init_grid(b, h, w, depth.device, depth.dtype)
+        if self.height != h or self.width != w:
+            self.init_grid(b, h, w, depth.device, depth.dtype)
+        cam_points = depth.view(b, 1, -1) * (inv_K_rect @ self.pix_coords)
+        cam_points = torch.cat([cam_points, self.ones], dim=1)
+
+        return cam_points
+
+    def backproject_depth_static(self, depth, inv_K_rect):
+        b, _, _, _ = depth.shape
         cam_points = depth.view(b, 1, -1) * (inv_K_rect @ self.pix_coords)
         cam_points = torch.cat([cam_points, self.ones], dim=1)
 
