@@ -80,5 +80,5 @@ trainer:
     max_norm: 1.0
 
 checkpoint: depth_from_events/uzhfpv_pretrained_a2a4gwea.ckpt
-cuda_compile_dict: "depth_from_events/cuda_compile_dict.pt"
+cuda_compile_dict: depth_from_events/cuda_compile_dict.pt
 state_dict_maps: {network.: "", disp_decoder: depth_decoder}

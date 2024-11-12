@@ -23,6 +23,7 @@ Some comments:
 
 torch.serialization.add_safe_globals([DotMap])
 
+
 # from https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
 def flatten_dict(dictionary, parent_key=""):
     items = []
@@ -111,14 +112,13 @@ def main(config):
         TimeRemainingColumn(elapsed_when_finished=True),
     ]
 
-    
     cuda_compile_dict = torch.load(config.cuda_compile_dict, weights_only=True)
     frames = cuda_compile_dict["frames"]
     auxs = cuda_compile_dict["auxs"]
     K_rect = cuda_compile_dict["K_rect"]
     inv_K_rect = cuda_compile_dict["inv_K_rect"]
-    
-            # loop over steps in chunk
+
+    # loop over steps in chunk
     for j, frame in enumerate(frames):
         # get auxiliary: events and counts
         aux = DotMap({k: v[j] for k, v in auxs.items()})
@@ -140,7 +140,7 @@ def main(config):
             if loss is not None:
                 optimizer.zero_grad()
                 loss.backward()
-            
+
                 clip_grad(network.parameters())
                 network.detach()
             loss_val = loss_function.compute_and_reset().get("cmax", 0)
@@ -154,8 +154,7 @@ def main(config):
     network.zero_grad()
 
     # reset network state to zero (not reset because that slows down the first batch)
-    network.state[0].zero_() 
-
+    network.state[0].zero_()
 
     with Progress(*columns, speed_estimate_period=10) as progress:
         global_step_task = progress.add_task("[cyan]step: 0 loss: 0.000", total=config.trainer.n_steps)
@@ -209,7 +208,7 @@ def main(config):
                         writer.add_scalar("loss", loss_val, global_step)
                         if global_step % 1000 == 0:
                             event_image = event_frame_to_image(frame[0].cpu())
-                            disparity = transform.depth_to_disparity(transform.clip_depth(yhat[0][0].detach().cpu()))
+                            disparity = transform.depth_to_disparity(yhat[0][0].detach().cpu())
                             disparity_image = disparity_map_to_image(disparity)
                             flow_image = flow_map_to_image(flow[0].detach().cpu())
                             writer.add_image("events", event_image, global_step, dataformats="HWC")
