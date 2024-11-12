@@ -44,7 +44,7 @@ class DsecSequence:
             / self.recording
             / "disparity_timestamps"
             / f"{self.recording}_disparity_timestamps.txt",
-            "eval_disparity_ts": self.root_dir / self.recording / "disparity_eval_timestamps" / f"{self.recording}.csv",
+            "eval_disparity_ts": self.root_dir / self.recording / "test_disparity_timestamps" / f"{self.recording}.csv",
             "rectify_map": self.root_dir / self.recording / "events_left" / "rectify_map.h5",
             "calibration": self.root_dir / self.recording / "calibration" / "cam_to_cam.yaml",
         }
@@ -270,7 +270,7 @@ class DsecSequence:
                 end = bisect_left(eval_disparity_ts, self.t_end[i])
                 if end - start > 0:
                     assert end - start == 1
-                    eval_disparity_id = eval_disparity_id[start]
+                    eval_disparity_id = int(eval_disparity_id[start])
                 else:
                     eval_disparity_id = None
             else:

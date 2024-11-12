@@ -87,9 +87,12 @@ class StoreDsecEvalDisparity(Callback):
 
     def on_test_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         for output in outputs.values():
-            if "eval_disparity" in output:
+
+            disparity_keys = [key for key in output.keys() if key.startswith("depth_disparity")]
+
+            for key in disparity_keys:
                 rec = batch.recording
-                eval_id, eval_disparity = output.eval_disparity
+                eval_id, eval_disparity = output[key]
                 eval_disparity = eval_disparity.cpu().numpy()
 
                 # format following https://dsec.ifi.uzh.ch/disparity-submission-format/
@@ -97,8 +100,8 @@ class StoreDsecEvalDisparity(Callback):
                 formatted_disp = (disp * 256).astype(np.uint16)
 
                 # write to file
-                (self.output_dir / rec).mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(self.output_dir / rec / f"{eval_id:06d}.png"), formatted_disp)
+                (self.output_dir / key / rec).mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(self.output_dir / key / rec / f"{eval_id:06d}.png"), formatted_disp)
 
     def on_test_epoch_end(self, trainer, litmodule):
         shutil.make_archive(self.output_dir, "zip", self.output_dir)

@@ -192,8 +192,8 @@ class Train(LightningModule):
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
                             self.log(f"{stage}/{name}/mean", value, batch_size=1)
                         elif stage == "test" and value:
-                            if name == "depth_disparity" and isinstance(value[1], tuple):
-                                log["eval_disparity"] = value
+                            if name.startswith("depth_disparity") and isinstance(value, tuple):
+                                log[name] = value
                             else:
                                 self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
                                 self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
@@ -204,13 +204,16 @@ class Train(LightningModule):
                 for loss_fn in self.loss_functions[stage].values():
                     loss_fn.reset()
 
-        return log_seq if self.visualizing else None
+        return log_seq if self.visualizing or stage == "test" else None
 
     def training_step(self, batch, batch_idx):
         return self.shared_step(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
         return self.shared_step(batch, batch_idx, "validate")
+
+    def test_step(self, batch, batch_idx):
+        return self.shared_step(batch, batch_idx, "test")
 
     def configure_optimizers(self):
         # split gradient clipping from optimizer

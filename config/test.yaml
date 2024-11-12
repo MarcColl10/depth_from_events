@@ -1,5 +1,9 @@
 defaults:
   - hydra: no_logging
+  - loss_functions@loss_functions.test:
+    - depth_disparity
+  - callbacks:
+    - store_dsec_eval_disp
   - _self_
 
 wandb:

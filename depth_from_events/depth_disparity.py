@@ -198,7 +198,7 @@ class DepthDisparityMetrics(nn.Module):
             assert any([isinstance(scale, (int, float)) for scale in self.scales]), "need scale for eval"
             for scale in self.scales:
                 if isinstance(scale, (int, float)):
-                    self.results[f"eval_{scale}"] = (gt_map, pred_map * scale)
+                    self.results[f"depth_disparity_eval_{scale}"] = (gt_map, pred_map * scale)
 
             self.passes += 1
             return
