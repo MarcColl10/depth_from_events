@@ -96,8 +96,8 @@ class DepthDisparityToFlow(nn.Module):
         """
         # initialize
         b, _, h, w = depth.shape
-        if self.height != h or self.width != w:
-            self.init_grid(b, h, w, depth.device, depth.dtype)
+        # if self.height != h or self.width != w:
+        #     self.init_grid(b, h, w, depth.device, depth.dtype)
         cam_points = depth.view(b, 1, -1) * (inv_K_rect @ self.pix_coords)
         cam_points = torch.cat([cam_points, self.ones], dim=1)
 

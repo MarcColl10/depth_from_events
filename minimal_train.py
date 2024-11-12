@@ -109,6 +109,57 @@ def main(config):
         TaskProgressColumn(show_speed=True),
         TimeRemainingColumn(elapsed_when_finished=True),
     ]
+
+
+    # Go through first X batches and backward to let CUDA graph compile
+    for i, batch in enumerate(dataloader):
+        if i >= 1:
+            break
+        print(f"Compiling CUDA graph")
+        frames, auxs = batch.frames, batch.auxs
+        frames = frames.to(device, dtype)
+        auxs = DotMap(events=auxs.events.to(device, dtype), counts=auxs.counts.to(device))  # integer counts
+        K_rect = batch.K_rect.to(device, dtype)
+        inv_K_rect = batch.inv_K_rect.to(device, dtype)
+
+        # loop over steps in chunk
+        for j, frame in enumerate(frames):
+            # get auxiliary: events and counts
+            aux = DotMap({k: v[j] for k, v in auxs.items()})
+
+            # forward network
+            # disparity net, so (disparity, pose)
+            yhat = network(frame)
+
+            # transform to flow
+            flow = transform(yhat, K_rect, inv_K_rect)
+
+            # forward loss function
+            loss_function(frame, aux, flow)
+
+            # backward if enough passes
+            # detach network after optimizer step (tbptt)
+            if loss_function.passes == loss_function.accumulation_window:
+                loss = loss_function.backward()
+                if loss is not None:
+                    optimizer.zero_grad()
+                    loss.backward()
+                    clip_grad(network.parameters())
+                    network.detach()
+                loss_val = loss_function.compute_and_reset().get("cmax", 0)
+
+    print("Finished the CUDA graph, resetting dataloader and network states")
+
+    # reset dataloader (not necessary when this is run in-the-loop)
+    dataloader = instantiate(config.dataloader, dataset)
+
+    # reset network states and gradients
+    network.zero_grad()
+
+    # reset network state to zero (not reset because that slows down the first batch)
+    network.state[0].zero_() 
+
+
     with Progress(*columns, speed_estimate_period=10) as progress:
         global_step_task = progress.add_task("[cyan]step: 0 loss: 0.000", total=config.trainer.n_steps)
 
