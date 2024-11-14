@@ -117,8 +117,9 @@ class Train(LightningModule):
                 depth, disparity, pose = None, None, None
                 flow = yhat
 
-            # log model prediction
+            # log model prediction and avg event count
             self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1, prog_bar=True)
+            # self.log(f"{stage}/event_count", aux.counts.float().mean(), batch_size=1, prog_bar=True)
 
             # add to log if visualizing
             if self.visualizing:

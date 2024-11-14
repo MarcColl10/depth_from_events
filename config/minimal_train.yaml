@@ -74,7 +74,8 @@ optimizer:
   lr: 1.e-5
 
 trainer:
-  n_steps: 24000  # 24k steps at 50 Hz = 8 minutes
+  compile: false
+  n_steps: 10000  # 24k steps at 50 Hz = 8 minutes
   clip_grad:
     _target_: torch.nn.utils.clip_grad_norm_  # TODO: does this work?
     _partial_: true

@@ -1,8 +1,10 @@
 from pathlib import Path
+import time
 
 from dotmap import DotMap  # TODO: move to tensordict
 import hydra
 from hydra.utils import instantiate
+import numpy as np
 from omegaconf import OmegaConf
 from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn, TimeRemainingColumn
 import torch
@@ -71,7 +73,8 @@ def main(config):
 
     # compile network
     # network = torch.compile(network, fullgraph=True, mode="max-autotune")
-    network = torch.compile(network, fullgraph=True, mode="reduce-overhead")
+    if config.trainer.compile:
+        network = torch.compile(network, fullgraph=True, mode="reduce-overhead")
 
     # disparity + pose to flow transform
     transform = instantiate(config.transform)
@@ -81,7 +84,8 @@ def main(config):
     # init of grid necessary for compilation
     # TODO: eventually combine transform and network into one module
     transform.init_grid(1, *dataset.sensor_size, device, dtype)
-    transform = torch.compile(transform, fullgraph=True, mode="reduce-overhead")
+    if config.trainer.compile:
+        transform = torch.compile(transform, fullgraph=True, mode="reduce-overhead")
 
     # loss function, optimizer, grad clipping
     loss_function = instantiate(config.loss_function)
@@ -161,6 +165,7 @@ def main(config):
 
         # train for certain amount of steps
         global_step = 0
+        times = []
         while True:
 
             # loop over chunks of recording
@@ -178,6 +183,11 @@ def main(config):
                     # get auxiliary: events and counts
                     aux = DotMap({k: v[j] for k, v in auxs.items()})
 
+                    # t0
+                    torch.cuda.synchronize()
+                    times.append([])
+                    t0 = time.time()
+
                     # forward network
                     # disparity net, so (disparity, pose)
                     yhat = network(frame)
@@ -193,7 +203,11 @@ def main(config):
                     # backward if enough passes
                     # detach network after optimizer step (tbptt)
                     if loss_function.passes == loss_function.accumulation_window:
+                        torch.cuda.synchronize()
+                        t0_learn = time.time()
                         loss = loss_function.backward()
+                        torch.cuda.synchronize()
+                        t1_learn = time.time()
                         if loss is not None:
                             optimizer.zero_grad()
                             loss.backward()
@@ -202,6 +216,9 @@ def main(config):
                             network.detach()
                             # memory.detach_()
                         loss_val = loss_function.compute_and_reset().get("cmax", 0)
+
+                        torch.cuda.synchronize()
+                        t2_learn = time.time()
 
                         # step logging
                         global_step += loss_function.accumulation_window
@@ -222,6 +239,14 @@ def main(config):
                         if global_step >= config.trainer.n_steps:
                             break
 
+                        times[-1].append(t1_learn - t0_learn)
+                        times[-1].append(t2_learn - t1_learn)
+
+                    # t1
+                    torch.cuda.synchronize()
+                    t1 = time.time()
+                    times[-1].append(t1 - t0)
+
                     # pretend theres no end of sequence, no resetting
                     # if we drop incomplete batches this is fine
 
@@ -232,6 +257,26 @@ def main(config):
             else:
                 continue
             break
+
+    # print times
+    fw_times = []
+    fw_nobw_times = []
+    fwbw_times = []
+    loss_times = []
+    bw_times = []
+    for t in times:
+        if len(t) == 1:
+            fw_times.append(t[-1])
+        elif len(t) == 3:
+            fwbw_times.append(t[-1])
+            fw_nobw_times.append(t[-1] - t[-2] - t[-3])
+            bw_times.append(t[-2])
+            loss_times.append(t[-3])
+    print(f"avg ms only fw: {np.mean(fw_times) * 1000:.2f} ms")
+    print(f"avg ms fw without bw: {np.mean(fw_nobw_times) * 1000:.2f} ms")
+    print(f"avg ms fw and bw: {np.mean(fwbw_times) * 1000:.2f} ms")
+    print(f"avg ms bw: {np.mean(bw_times) * 1000:.2f} ms")
+    print(f"avg ms loss: {np.mean(loss_times) * 1000:.2f} ms")
 
     # save model
     torch.save(network.state_dict(), f"{writer.log_dir}/network_trained.pt")
