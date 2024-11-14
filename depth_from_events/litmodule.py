@@ -42,6 +42,13 @@ class Train(LightningModule):
             [isinstance(cb, (callbacks.LiveVisualizer, callbacks.ImageLogger)) for cb in self.trainer.callbacks]
         )
 
+        # self.counter = 0
+        # with open("logs/rsat_0.txt", "r") as f:
+        #     self.rsat_0 = [float(line.strip()) for line in f.readlines()]
+        # with open("logs/mae_0.txt", "r") as f:
+        #     self.mae_0 = [float(line.strip()) for line in f.readlines()]
+        # print(len(self.rsat_0), len(self.mae_0))
+
     def shared_step(self, batch, batch_idx, stage):
         # training: get optimizer because manual optimization
         if stage == "train":
@@ -180,6 +187,7 @@ class Train(LightningModule):
                 self.network.detach()
 
             # go over loss functions
+            # rsat, mae = 0, 0
             for name, loss_fn in self.loss_functions[stage].items():
                 # reset if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
@@ -192,12 +200,28 @@ class Train(LightningModule):
                         elif stage == "validate" and value:
                             self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
                             self.log(f"{stage}/{name}/mean", value, batch_size=1)
+                            # if name == "rsat":
+                            #     log["/rsat"] = value.item() if isinstance(value, torch.Tensor) else value
+                            #     # rsat = value.item() if isinstance(value, torch.Tensor) else value
+                            #     log["/rsat_0"] = self.rsat_0[self.counter]
+                            #     log["/rsat_diff"] = log["/rsat"] - log["/rsat_0"]
+                            # elif name == "mae_median_eventsFalse_cutoffNone":
+                            #     log["/mae"] = value.item() if isinstance(value, torch.Tensor) else value
+                            #     # mae = value.item() if isinstance(value, torch.Tensor) else value
+                            #     log["/mae_0"] = self.mae_0[self.counter]
+                            #     log["/mae_diff"] = log["/mae"] - log["/mae_0"]
                         elif stage == "test" and value:
                             if name.startswith("depth_disparity") and isinstance(value, tuple):
                                 log[name] = value
                             else:
                                 self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
                                 self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
+
+            # with open("logs/rsat_0.txt", "a") as f:
+            #     f.write(f"{rsat}\n")
+            # with open("logs/mae_0.txt", "a") as f:
+            #     f.write(f"{mae}\n")
+            # self.counter += 1
 
             # reset if end of sequence
             if any(eof):
