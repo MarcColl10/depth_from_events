@@ -10,13 +10,15 @@ import hdf5plugin
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("h5")
+    parser.add_argument("mp4")
     parser.add_argument("csv")
     parser.add_argument("output")
     args = parser.parse_args()
 
     # Show the image of cyberzoo top view and undistort it.
     # Load one frame of video .mp4 file
-    cap = cv2.VideoCapture("data/figures/vlc-record-2024-11-14-11h34m45s-rtsp___192.168.209.102_live1s1.sdp-.mp4")
+    # cap = cv2.VideoCapture("data/figures/vlc-record-2024-11-14-11h34m45s-rtsp___192.168.209.102_live1s1.sdp-.mp4")
+    cap = cv2.VideoCapture(args.mp4)
     ret, img = cap.read()
     cap.release()
 
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     merged_df = pd.merge_asof(data, control_df, on="ts", direction="nearest")
 
     # Plot the merged data
-    n_steps = 160000  # amount of steps to plot
+    n_steps = 210000  # amount of steps to plot
     plt.imshow(cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB), alpha=0.5)
     # plt.gca().spines['top'].set_visible(False)
     # plt.gca().spines['right'].set_visible(False)
