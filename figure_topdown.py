@@ -1,3 +1,4 @@
+import argparse
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,11 +7,16 @@ import h5py
 import hdf5plugin
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("h5")
+    parser.add_argument("csv")
+    parser.add_argument("output")
+    args = parser.parse_args()
 
-    # Show the image of cyberzoo top view and undistort it. 
+    # Show the image of cyberzoo top view and undistort it.
     # Load one frame of video .mp4 file
-    cap = cv2.VideoCapture('data/figures/top.mp4')
+    cap = cv2.VideoCapture("data/figures/vlc-record-2024-11-14-11h34m45s-rtsp___192.168.209.102_live1s1.sdp-.mp4")
     ret, img = cap.read()
     cap.release()
 
@@ -31,12 +37,14 @@ if __name__ == '__main__':
 
     pad = 80
     # Define the points in the "destination" perspective, a rectangle with straight lines
-    dst_points = np.float32([
-        [pad * wh_ratio, pad],
-        [width - pad * wh_ratio, pad],
-        [width - pad * wh_ratio, height - pad],
-        [pad * wh_ratio, height - pad]
-    ])
+    dst_points = np.float32(
+        [
+            [pad * wh_ratio, pad],
+            [width - pad * wh_ratio, pad],
+            [width - pad * wh_ratio, height - pad],
+            [pad * wh_ratio, height - pad],
+        ]
+    )
 
     # Compute the perspective transformation matrix
     matrix = cv2.getPerspectiveTransform(src_points, dst_points)
@@ -60,7 +68,7 @@ if __name__ == '__main__':
             r = np.sqrt(dx * dx + dy * dy)
 
             # Apply the radial distortion formula
-            scale = 1 + k * (r ** 2)
+            scale = 1 + k * (r**2)
             new_x = center_x + dx * center_x * scale
             new_y = center_y + dy * center_y * scale
 
@@ -73,44 +81,89 @@ if __name__ == '__main__':
 
     # Plot the X,Y coordinates of the drone on the image from Optitrack
     # Load the .csv file with optitrack data
-    data = pd.read_csv('data/figures/top_more.csv', delimiter=',', index_col=0, names=['ts', 'Xr', 'Yr', 'Zr', 'X', 'Y', 'Z'], skiprows=7)
-    
-    scale = 0.09 # scale factor to convert from meters to pixels
+    data = pd.read_csv(
+        # "data/figures/Take 2024-11-14 08.13.27 AM.csv",
+        args.csv,
+        delimiter=",",
+        index_col=0,
+        names=["ts", "Xr", "Yr", "Zr", "X", "Y", "Z"],
+        skiprows=7,
+    )
+
+    scale = 0.09  # scale factor to convert from meters to pixels
     x_offset = 163
     z_offset = 415
-    data['X'] = data['X'] * scale
-    data['X'] = -data['X'] + x_offset
-    data['Z'] = data['Z'] * scale
-    data['Z'] = data['Z'] + z_offset
+    data["X"] = data["X"] * scale
+    data["X"] = -data["X"] + x_offset
+    data["Z"] = data["Z"] * scale
+    data["Z"] = data["Z"] + z_offset
 
-    # Determine where obstacle avoidance was active and mark in the plot. 
-    # Load rosbag with h5py    
-    f = h5py.File('data/figures/top.h5', 'r')
-    
+    # Determine where obstacle avoidance was active and mark in the plot.
+    # Load rosbag with h5py
+    # f = h5py.File("data/raw/flights/rosbag2_2024-11-14-08-12-43_0.h5")
+    f = h5py.File(args.h5)
+
     control_values = f["control"]
 
     # Create dataframe with control values
-    control_df = pd.DataFrame({
-        'ts': control_values['status_ts'][:] / 1000000,
-        'status': control_values['status'][:]
-    })
+    control_df = pd.DataFrame({"ts": control_values["status_ts"][:] / 1000000, "status": control_values["status"][:]})
 
-    t_offset = 14.8 # offset to align the control data with the optitrack data
-    control_df['ts'] = control_df['ts'] - control_df['ts'][0] + t_offset
+    t_offset = 14.8  # offset to align the control data with the optitrack data
+    control_df["ts"] = control_df["ts"] - control_df["ts"][0] + t_offset
 
     # Merge control_df and data on the 'ts' column
-    merged_df = pd.merge_asof(data, control_df, on='ts', direction='nearest')
+    merged_df = pd.merge_asof(data, control_df, on="ts", direction="nearest")
 
     # Plot the merged data
-    n_steps = 160000 # amount of steps to plot
-    plt.imshow(cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB))
-    plt.plot(merged_df['Z'][:n_steps], merged_df['X'][:n_steps], 'r-', linewidth=4)
-    plt.xlabel('Z')
-    plt.ylabel('X')
-    plt.plot(merged_df['Z'][0], merged_df['X'][0], 'bo')
+    n_steps = 160000  # amount of steps to plot
+    plt.imshow(cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB), alpha=0.5)
+    # plt.gca().spines['top'].set_visible(False)
+    # plt.gca().spines['right'].set_visible(False)
+    # plt.gca().spines['bottom'].set_visible(False)  # For example, hide the bottom axis line
+    # plt.gca().spines['left'].set_visible(False)    # Hide the left axis line
+    import matplotlib
+    from matplotlib.collections import LineCollection
+
+    segments = np.zeros((n_steps // 10, 2, 2))
+    segments[:, 0, 0] = merged_df["Z"][0:n_steps:10]
+    segments[:, 0, 1] = merged_df["X"][0:n_steps:10]
+    segments[:, 1, 0] = merged_df["Z"][10 : n_steps + 10 : 10]
+    segments[:, 1, 1] = merged_df["X"][10 : n_steps + 10 : 10]
+    # segments = np.zeros((n_steps, 2, 2))
+    # segments[:, 0, 0] = merged_df['Z'][:n_steps:]
+    # segments[:, 0, 1] = merged_df['X'][:n_steps:]
+    # segments[:, 1, 0] = merged_df['Z'][1:n_steps+1:]
+    # segments[:, 1, 1] = merged_df['X'][1:n_steps+1:]
+    cmap = matplotlib.colors.ListedColormap(["C1", "C0"])
+    lc = LineCollection(segments, cmap=cmap, linewidth=2)
+    lc.set_array(merged_df[0:n_steps:10]["status"])
+    # lc.set_array(merged_df[:n_steps]['status'])
+    plt.gca().add_collection(lc)
+    # plt.axis('off')
+    plt.gca().spines["top"].set_visible(True)
+    plt.gca().spines["right"].set_visible(True)
+    plt.gca().spines["bottom"].set_visible(True)
+    plt.gca().spines["left"].set_visible(True)
+
+    # Hide ticks and tick labels
+    plt.gca().xaxis.set_ticks([])
+    plt.gca().yaxis.set_ticks([])
+
+    # Remove axis labels
+    plt.gca().set_xlabel("")
+    plt.gca().set_ylabel("")
+
+    # plt.plot(merged_df['Z'][:n_steps], merged_df['X'][:n_steps], "k")
+    # plt.xlabel('Z')
+    # plt.ylabel('X')
+    # plt.plot(merged_df['Z'][0], merged_df['X'][0], 'bo')
 
     # Highlight points where obstacle avoidance was active
-    active_points = merged_df[:n_steps][merged_df['status'][:n_steps] == 1]
-    plt.plot(active_points['Z'], active_points['X'], 'go', markersize=2)
+    active_points = merged_df[:n_steps][merged_df["status"][:n_steps] == 1]
+    # plt.plot(active_points['Z'], active_points['X'], 'go', markersize=2)
+    # plt.xlim(0, 790)
+    # plt.ylim(0, 594)
 
-    plt.show()
+    # plt.savefig("data/figures/topdown_pretrainedlearning.pdf", bbox_inches='tight', transparent=True)
+    plt.savefig(args.output, bbox_inches="tight", transparent=True)
+    # plt.savefig("data/figures/topdown_pretrainedlearning.png", dpi=300)
