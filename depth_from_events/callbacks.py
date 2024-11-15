@@ -68,6 +68,10 @@ class ImageLogger(Callback):
             for k in [k for k in output.keys() if "disparity" in k]:
                 self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
 
+            # color images
+            for k in [k for k in output.keys() if "color" in k]:
+                self.visualizer.color_image(output[k][0].detach().cpu(), name=k)
+
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
 

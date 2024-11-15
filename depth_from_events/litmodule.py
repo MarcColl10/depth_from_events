@@ -139,9 +139,11 @@ class Train(LightningModule):
                     log["/pose_gt"] = pose_gt[i].unsqueeze(0)
                 if targets is not None:
                     if targets[i].get("gt_depth") is not None:
-                        log["/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
+                        log[f"{stage}/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
                     elif targets[i].get("gt_disparity") is not None:
-                        log["/disparity_gt"] = targets[i].gt_disparity
+                        log[f"{stage}/disparity_gt"] = targets[i].gt_disparity
+                    if targets[i].get("gt_color") is not None:
+                        log[f"{stage}/color_gt"] = targets[i].gt_color
 
             # go over loss functions
             loss = 0

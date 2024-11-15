@@ -226,6 +226,22 @@ class FlightSequence:
                 gt_depth = None
                 gt_depth_id = None
 
+            # gt color image
+            if self.gt and "color" in self.gt:
+                start = bisect_left(self.h5["gt/color_ts"], self.t_start[i])
+                end = bisect_left(self.h5["gt/color_ts"], self.t_end[i])
+                if end - start > 0:
+                    try:
+                        assert end - start == 1  # only one color frame per event_window
+                    except AssertionError:
+                        print(f"Multiple color frames in event window {i}, taking latest")
+                        start = end - 1
+                    gt_color = self.h5["gt/color"][start]
+                else:
+                    gt_color = None
+            else:
+                gt_color = None
+
             # append
             events.append(lst)
             frames.append(frame)
@@ -234,6 +250,7 @@ class FlightSequence:
                 DotMap(
                     gt_depth=gt_depth,
                     gt_depth_id=gt_depth_id,
+                    gt_color=gt_color,
                 )
             )
 
@@ -363,7 +380,7 @@ class FlightSequence:
 
 
 class FlightDataModule(LightningDataModule):
-    gt = ["depth"]  # and color
+    gt = ["depth", "color"]
 
     def __init__(
         self,

@@ -116,3 +116,7 @@ class ImageVisualizer:
     def disparity_map(self, frame, name="disparity"):
         image = disparity_map_to_image(frame)
         self.save_image(name, image)
+
+    def color_image(self, frame, name="color"):
+        image = frame.permute(1, 2, 0).numpy().astype(np.uint8)
+        self.save_image(name, image)
