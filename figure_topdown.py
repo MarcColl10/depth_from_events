@@ -12,6 +12,8 @@ if __name__ == "__main__":
     parser.add_argument("h5")
     parser.add_argument("mp4")
     parser.add_argument("csv")
+    parser.add_argument("start", type=int)
+    parser.add_argument("stop", type=int)
     parser.add_argument("output")
     args = parser.parse_args()
 
@@ -116,8 +118,26 @@ if __name__ == "__main__":
     # Merge control_df and data on the 'ts' column
     merged_df = pd.merge_asof(data, control_df, on="ts", direction="nearest")
 
+    # start: column Y reaches value 100 for the first time
+    # Find the index of the first value in column 'Y' that is larger than 100
+    start = (merged_df["Y"] > 100).idxmax()
+    print(f"Start index: {start}")
+    stop = merged_df[(merged_df["Y"] > 200) & (merged_df.index > start)].index[-1]
+    print(f"Stop index: {stop}")
+    # stop = merged_df[merged_df["Y"] > 100].index[-1]
+
+
     # Plot the merged data
-    n_steps = 210000  # amount of steps to plot
+    # start, stop = 28000, 209000
+    start = args.start
+    stop = args.stop
+    plt.plot(merged_df["Y"])
+    plt.axvline(start, color="r")
+    plt.axvline(stop, color="r")
+    plt.axhline(150, color="g")
+    plt.savefig(f"{args.output}_z.png")
+    n_steps = stop - start
+    # n_steps = 210000  # amount of steps to plot
     plt.imshow(cv2.cvtColor(corrected_image, cv2.COLOR_BGR2RGB), alpha=0.5)
     # plt.gca().spines['top'].set_visible(False)
     # plt.gca().spines['right'].set_visible(False)
@@ -127,10 +147,10 @@ if __name__ == "__main__":
     from matplotlib.collections import LineCollection
 
     segments = np.zeros((n_steps // 10, 2, 2))
-    segments[:, 0, 0] = merged_df["Z"][0:n_steps:10]
-    segments[:, 0, 1] = merged_df["X"][0:n_steps:10]
-    segments[:, 1, 0] = merged_df["Z"][10 : n_steps + 10 : 10]
-    segments[:, 1, 1] = merged_df["X"][10 : n_steps + 10 : 10]
+    segments[:, 0, 0] = merged_df["Z"][start:stop:10]
+    segments[:, 0, 1] = merged_df["X"][start:stop:10]
+    segments[:, 1, 0] = merged_df["Z"][start + 10 : stop + 10 : 10]
+    segments[:, 1, 1] = merged_df["X"][start + 10 : stop + 10 : 10]
     # segments = np.zeros((n_steps, 2, 2))
     # segments[:, 0, 0] = merged_df['Z'][:n_steps:]
     # segments[:, 0, 1] = merged_df['X'][:n_steps:]
@@ -138,7 +158,7 @@ if __name__ == "__main__":
     # segments[:, 1, 1] = merged_df['X'][1:n_steps+1:]
     cmap = matplotlib.colors.ListedColormap(["C1", "C0"])
     lc = LineCollection(segments, cmap=cmap, linewidth=2)
-    lc.set_array(merged_df[0:n_steps:10]["status"])
+    lc.set_array(merged_df[start:stop:10]["status"])
     # lc.set_array(merged_df[:n_steps]['status'])
     plt.gca().add_collection(lc)
     # plt.axis('off')
@@ -155,13 +175,15 @@ if __name__ == "__main__":
     plt.gca().set_xlabel("")
     plt.gca().set_ylabel("")
 
+    print(args.output, merged_df[start:stop]["status"].mean())
+
     # plt.plot(merged_df['Z'][:n_steps], merged_df['X'][:n_steps], "k")
     # plt.xlabel('Z')
     # plt.ylabel('X')
     # plt.plot(merged_df['Z'][0], merged_df['X'][0], 'bo')
 
     # Highlight points where obstacle avoidance was active
-    active_points = merged_df[:n_steps][merged_df["status"][:n_steps] == 1]
+    # active_points = merged_df[:n_steps][merged_df["status"][:n_steps] == 1]
     # plt.plot(active_points['Z'], active_points['X'], 'go', markersize=2)
     # plt.xlim(0, 790)
     # plt.ylim(0, 594)
