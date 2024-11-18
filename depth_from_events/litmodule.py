@@ -200,18 +200,15 @@ class Train(LightningModule):
                         if stage == "train" and value:
                             self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
                         elif stage == "validate" and value:
-                            self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
-                            self.log(f"{stage}/{name}/mean", value, batch_size=1)
-                            # if name == "rsat":
-                            #     log["/rsat"] = value.item() if isinstance(value, torch.Tensor) else value
-                            #     # rsat = value.item() if isinstance(value, torch.Tensor) else value
-                            #     log["/rsat_0"] = self.rsat_0[self.counter]
-                            #     log["/rsat_diff"] = log["/rsat"] - log["/rsat_0"]
-                            # elif name == "mae_median_eventsFalse_cutoffNone":
-                            #     log["/mae"] = value.item() if isinstance(value, torch.Tensor) else value
-                            #     # mae = value.item() if isinstance(value, torch.Tensor) else value
-                            #     log["/mae_0"] = self.mae_0[self.counter]
-                            #     log["/mae_diff"] = log["/mae"] - log["/mae_0"]
+                            if name.startswith("depth_disparity") and isinstance(value, tuple):
+                                log[name] = value
+                            if name.startswith("mae"):
+                                log[name] = value
+                            if name.startswith("hist"):
+                                log[name] = value
+                            if isinstance(value, (torch.Tensor, float, int)):  # if loggable
+                                self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
+                                self.log(f"{stage}/{name}/mean", value, batch_size=1)
                         elif stage == "test" and value:
                             if name.startswith("depth_disparity") and isinstance(value, tuple):
                                 log[name] = value

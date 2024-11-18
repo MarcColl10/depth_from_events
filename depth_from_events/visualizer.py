@@ -86,6 +86,10 @@ class RerunVisualizer:
     def log_scalar(name, scalar):
         rr.log(name, rr.Scalar(scalar))
 
+    @staticmethod
+    def log_tensor(name, tensor):
+        rr.log(name, rr.Tensor(tensor))
+
 
 class ImageVisualizer:
     def __init__(self, root_dir, names, format):

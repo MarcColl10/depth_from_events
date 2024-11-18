@@ -31,7 +31,11 @@ class LiveVisualizer(Callback):
 
             # things with disparity
             for k in [k for k in output.keys() if "disparity" in k]:
-                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                if isinstance(output[k], tuple):
+                    self.visualizer.disparity_map(output[k][1][0].detach().cpu(), name=k)
+                    self.visualizer.disparity_map(output[k][0][0].detach().cpu(), name=f"gt_{k}")
+                else:
+                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
 
             # things with pose
             for k in [k for k in output.keys() if "pose" in k]:
@@ -40,6 +44,11 @@ class LiveVisualizer(Callback):
             # for scalar values
             for k in [k for k in output.keys() if isinstance(output[k], (int, float))]:
                 self.visualizer.log_scalar(k, output[k])
+
+            # for histograms
+            for k in [k for k in output.keys() if k.startswith("hist")]:
+                self.visualizer.log_tensor(f"{k}_gt", output[k][0].hist)
+                self.visualizer.log_tensor(k, output[k][1].hist)
 
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
