@@ -26,12 +26,22 @@ class LiveVisualizer(Callback):
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
             # things with flow
-            for k in [k for k in output.keys() if k.endswith("flow")]:
-                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "flow" in k]:
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
             for k in [k for k in output.keys() if "disparity" in k]:
-                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+
+            # things with color
+            for k in [k for k in output.keys() if "color" in k]:
+                self.visualizer.color_image(output[k][0].detach().cpu(), name=k)
 
             # things with pose
             for k in [k for k in output.keys() if "pose" in k]:
@@ -61,16 +71,26 @@ class ImageLogger(Callback):
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
             # things with flow
-            for k in [k for k in output.keys() if k.endswith("flow")]:
-                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "flow" in k]:
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
             for k in [k for k in output.keys() if "disparity" in k]:
-                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
 
             # color images
             for k in [k for k in output.keys() if "color" in k]:
                 self.visualizer.color_image(output[k][0].detach().cpu(), name=k)
+
+            # for scalar values
+            for k in [k for k in output.keys() if isinstance(output[k], (int, float))]:
+                self.visualizer.scalar(k, output[k])
 
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)

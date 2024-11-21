@@ -24,6 +24,11 @@ class Train(LightningModule):
             x = torch.zeros(self.trainer.datamodule.train_frame_shape, device=self.device)
             self.network.trace(x)
 
+        # print parameter count per module
+        # for name, module in self.network.named_modules():
+        #     n_params = sum(p.numel() for p in module.parameters())
+        #     print(f"{name}: {n_params}")
+
         # NOTE: not helping!
         # # compile network
         # self.network = torch.compile(self.network, fullgraph=True, mode="reduce-overhead")
@@ -132,8 +137,10 @@ class Train(LightningModule):
             if self.visualizing:
                 log[f"{stage}/events"] = frame
                 log[f"{stage}/flow"] = flow
+                log[f"{stage}/flow_raw"] = flow
                 if self.transform is not None:
                     log[f"{stage}/disparity"] = disparity
+                    log[f"{stage}/disparity_raw"] = disparity
                     log[f"{stage}/pose"] = pose
                 if pose_gt is not None:
                     log["/pose_gt"] = pose_gt[i].unsqueeze(0)
@@ -144,6 +151,14 @@ class Train(LightningModule):
                         log[f"{stage}/disparity_gt"] = targets[i].gt_disparity
                     if targets[i].get("gt_color") is not None:
                         log[f"{stage}/color_gt"] = targets[i].gt_color
+                    if targets[i].get("depth_pred") is not None:
+                        log[f"{stage}/disparity_pred"] = self.transform.depth_to_disparity(targets[i].depth_pred)
+                    if targets[i].get("yaw_rate") is not None:
+                        log[f"{stage}/yaw_rate"] = targets[i].yaw_rate.item()
+                    if targets[i].get("yaw_rate_pred") is not None:
+                        log[f"{stage}/yaw_rate_pred"] = targets[i].yaw_rate_pred.item()
+                    if targets[i].get("status") is not None:
+                        log[f"{stage}/status"] = targets[i].status.item()
 
             # go over loss functions
             loss = 0

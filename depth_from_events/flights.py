@@ -242,6 +242,70 @@ class FlightSequence:
             else:
                 gt_color = None
 
+            # depth pred
+            if self.gt and "depth_pred" in self.gt:
+                start = bisect_left(self.h5["learner/depth_pred_ts"], self.t_start[i])
+                end = bisect_left(self.h5["learner/depth_pred_ts"], self.t_end[i])
+                if end - start > 0:
+                    try:
+                        assert end - start == 1  # only one depth map per event_window
+                    except AssertionError:
+                        print(f"Multiple depth predictions in event window {i}, taking latest")
+                        start = end - 1
+                    depth_pred = self.h5["learner/depth_pred"][start]
+                else:
+                    depth_pred = None
+            else:
+                depth_pred = None
+
+            # yaw rate
+            if self.gt and "yaw_rate" in self.gt:
+                start = bisect_left(self.h5["control_rs/yaw_rate_ts"], self.t_start[i])
+                end = bisect_left(self.h5["control_rs/yaw_rate_ts"], self.t_end[i])
+                if end - start > 0:
+                    try:
+                        assert end - start == 1  # only one yaw rate per event_window
+                    except AssertionError:
+                        print(f"Multiple yaw rates in event window {i}, taking latest")
+                        start = end - 1
+                    yaw_rate = self.h5["control_rs/yaw_rate"][start]
+                else:
+                    yaw_rate = None
+            else:
+                yaw_rate = None
+
+            # yaw rate pred
+            if self.gt and "yaw_rate_pred" in self.gt:
+                start = bisect_left(self.h5["learner/yaw_rate_ts"], self.t_start[i])
+                end = bisect_left(self.h5["learner/yaw_rate_ts"], self.t_end[i])
+                if end - start > 0:
+                    try:
+                        assert end - start == 1  # only one yaw rate per event_window
+                    except AssertionError:
+                        print(f"Multiple yaw rate predictions in event window {i}, taking latest")
+                        start = end - 1
+                    yaw_rate_pred = self.h5["learner/yaw_rate"][start]
+                else:
+                    yaw_rate_pred = None
+            else:
+                yaw_rate_pred = None
+
+            # status
+            if self.gt and "status" in self.gt:
+                start = bisect_left(self.h5["control/status_ts"], self.t_start[i])
+                end = bisect_left(self.h5["control/status_ts"], self.t_end[i])
+                if end - start > 0:
+                    try:
+                        assert end - start == 1  # only one status per event_window
+                    except AssertionError:
+                        print(f"Multiple statuses in event window {i}, taking latest")
+                        start = end - 1
+                    status = self.h5["control/status"][start]
+                else:
+                    status = None
+            else:
+                status = None
+
             # append
             events.append(lst)
             frames.append(frame)
@@ -251,6 +315,10 @@ class FlightSequence:
                     gt_depth=gt_depth,
                     gt_depth_id=gt_depth_id,
                     gt_color=gt_color,
+                    depth_pred=depth_pred,
+                    yaw_rate=yaw_rate,
+                    yaw_rate_pred=yaw_rate_pred,
+                    status=status,
                 )
             )
 
@@ -380,7 +448,7 @@ class FlightSequence:
 
 
 class FlightDataModule(LightningDataModule):
-    gt = ["depth", "color"]
+    gt = ["depth", "color", "depth_pred", "yaw_rate", "yaw_rate_pred", "status"]
 
     def __init__(
         self,

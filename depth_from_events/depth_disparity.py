@@ -48,7 +48,7 @@ class DepthDisparityToFlow(nn.Module):
             K_rect[:, 0, 2] = cx_factor * w
             K_rect[:, 1, 2] = cy_factor * h
             K_rect[:, 2, 2] = 1
-            inv_K_rect = torch.linalg.pinv(K_rect)
+            inv_K_rect = torch.linalg.inv(K_rect)
 
         # split pose into axis-angle representation and translation
         axis_angle, translation = pose.split([3, 3], dim=-1)

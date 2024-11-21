@@ -290,7 +290,7 @@ class MvsecSequence:
             K_rect[1, 2] = (bottom - top - 1) - K_rect[1, 2]
         if "horizontal" in self.augmentation:
             K_rect[0, 2] = (right - left - 1) - K_rect[0, 2]
-        inv_K_rect = np.linalg.pinv(K_rect)
+        inv_K_rect = np.linalg.inv(K_rect)
 
         # convert to torch
         events = rfn.structured_to_unstructured(events, dtype=np.float32)
