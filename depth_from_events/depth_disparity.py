@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import rerun as rr
 
 
 class DepthDisparityToFlow(nn.Module):
@@ -224,6 +225,13 @@ class DepthDisparityMetrics(nn.Module):
                 self.results["scale"] = (gt_median / pred_median).item()
             elif isinstance(scale, (int, float)):
                 scaled_pred_maps[scale] = pred_map * scale
+            self.results[f"depth_disparity_eval_{scale}"] = (gt_map.clone(), scaled_pred_maps[scale].clone())
+            # per pixel histogram
+            max_disparity = torch.max(torch.max(gt_map), torch.max(scaled_pred_maps[scale]))
+            bins = 30
+            pred_hist = torch.histogram(scaled_pred_maps[scale].cpu(), bins=bins, range=(0, max_disparity))
+            gt_hist = torch.histogram(gt_map.cpu(), bins=bins, range=(0, max_disparity))
+            self.results[f"hist_{scale}"] = (gt_hist, pred_hist)
 
         # go over all metrics
         for metric in self.metrics:
@@ -236,7 +244,47 @@ class DepthDisparityMetrics(nn.Module):
                     for mask_name, mask in gt_masks.items():
                         # depth_map = depth_map.clamp(*clamp)
                         mae = F.l1_loss(map_[mask], gt_map[mask], reduction="mean")
+                        # for visualization only
+                        map_v_ = map_.clone()
+                        gt_map_v_ = gt_map.clone()
+                        map_v_[~mask] = 0
+                        gt_map_v_[~mask] = 0
+                        # ad-hoc fix so that the saved disparity does not get plotted as events
+                        mask_name = mask_name.replace("events", "event")
+                        self.results[f"depth_disparity_eval_{scale}_{mask_name}"] = (gt_map_v_, map_v_)
                         self.results[f"{metric}_{scale}_{mask_name}"] = mae.item()
+
+                        # per pixel histogram
+                        max_disparity = torch.max(torch.max(gt_map[mask]), torch.max(map_[mask]))
+                        bins = 30
+                        pred_hist = torch.histogram(map_[mask].cpu(), bins=bins, range=(0, max_disparity))
+                        gt_hist = torch.histogram(gt_map[mask].cpu(), bins=bins, range=(0, max_disparity))
+                        self.results[f"hist_{scale}_{mask_name}"] = (gt_hist, pred_hist)
+
+            if metric == "absrel":
+                for scale, map_ in scaled_pred_maps.items():
+                    for mask_name, mask in gt_masks.items():
+                        absrel = torch.abs(map_[mask] - gt_map[mask]) / gt_map[mask]
+                        # absrel = absrel[~torch.isnan(absrel)]
+                        # absrel = absrel[~torch.isinf(absrel)]
+                        absrel = absrel.mean()
+                        mask_name = mask_name.replace("events", "event")
+                        self.results[f"{metric}_{scale}_{mask_name}"] = absrel.item()
+
+            if metric == "rmselog":
+                for scale, map_ in scaled_pred_maps.items():
+                    for mask_name, mask in gt_masks.items():
+                        rmselog = torch.sqrt(F.mse_loss(torch.log(map_[mask] + 1e-9), torch.log(gt_map[mask] + 1e-9)))
+                        mask_name = mask_name.replace("events", "event")
+                        self.results[f"{metric}_{scale}_{mask_name}"] = rmselog.item()
+
+            if metric == "silog":
+                for scale, map_ in scaled_pred_maps.items():
+                    for mask_name, mask in gt_masks.items():
+                        diff = torch.log(map_[mask] + 1e-9) - torch.log(gt_map[mask] + 1e-9)
+                        silog = torch.mean(diff**2) - (torch.mean(diff) ** 2)
+                        mask_name = mask_name.replace("events", "event")
+                        self.results[f"{metric}_{scale}_{mask_name}"] = silog.item()
 
         self.passes += 1
 
