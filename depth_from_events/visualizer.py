@@ -49,12 +49,19 @@ class RerunVisualizer:
         image = event_frame_to_image(frame)
         self.log_image(name, image, self.compression)
 
+    def raw_map(self, frame, name="raw"):
+        pass
+
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
         self.log_image(name, image, self.compression)
 
     def disparity_map(self, frame, name="disparity"):
         image = disparity_map_to_image(frame)
+        self.log_image(name, image, self.compression)
+
+    def color_image(self, frame, name="color"):
+        image = frame.permute(1, 2, 0).numpy().astype(np.uint8)
         self.log_image(name, image, self.compression)
 
     def pose_trajectory(self, pose, name="pose"):
@@ -92,6 +99,10 @@ class RerunVisualizer:
     def log_scalar(name, scalar):
         rr.log(name, rr.Scalar(scalar))
 
+    @staticmethod
+    def log_tensor(name, tensor):
+        rr.log(name, rr.Tensor(tensor))
+
 
 class ImageVisualizer:
     def __init__(self, root_dir, names, format):
@@ -111,9 +122,16 @@ class ImageVisualizer:
             image = Image.fromarray(image)
             image.save(self.root_dir / name / f"{self.counter:05d}.{self.format}")
 
+    def save_nparray(self, frame, name):
+        if (self.root_dir / name).exists():
+            np.save(self.root_dir / name / f"{self.counter:05d}.npy", frame)
+
     def event_frame(self, frame, name="events"):
         image = event_frame_to_image(frame)
         self.save_image(name, image)
+
+    def raw_map(self, frame, name="raw"):
+        self.save_nparray(frame, name)
 
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
@@ -122,3 +140,11 @@ class ImageVisualizer:
     def disparity_map(self, frame, name="disparity"):
         image = disparity_map_to_image(frame)
         self.save_image(name, image)
+
+    def color_image(self, frame, name="color"):
+        image = frame.permute(1, 2, 0).numpy().astype(np.uint8)
+        self.save_image(name, image)
+
+    def scalar(self, name, scalar):
+        with open(self.root_dir / name / "data.txt", "a") as f:
+            f.write(f"{self.counter:05d},{scalar}\n")

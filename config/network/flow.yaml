@@ -1,4 +1,5 @@
 _target_: depth_from_events.network.WrappedFlowNetwork
+mode: flow
 encoder_channels: 64
 memory_channels: 64
 decoder_channels: 64

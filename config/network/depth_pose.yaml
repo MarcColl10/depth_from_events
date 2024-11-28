@@ -1,0 +1,12 @@
+_target_: depth_from_events.network.WrappedDepthPoseNetwork
+_convert_: object  # if you want to torch.compile
+mode: depth  # depth/disparity
+encoder_channels: 64
+memory_channels: 64
+decoder_channels: 64
+activation_fn:
+  _target_: torch.nn.ELU
+  _partial_: true 
+final_bias: false
+padding_mode: reflect
+scaling: [1, 0.01]  # depth/disparity, pose

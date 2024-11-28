@@ -1,0 +1,8 @@
+depth_disparity:
+  _target_: depth_from_events.depth_disparity.DepthDisparityMetrics
+  metrics: [mae]  # mae, rmse, rmse_log, silog, abs_rel, sq_rel, d1_acc, d2_acc, d3_acc
+  scales: [median]  # median scales pred by gt median/pred median, float or int scales by fixed value, null disables
+  # [20.2, 33.9, 28.6] for dsec test, interlaken: 20.2, thun: 33.9, zurich_city: 28.6
+  # clamps: [[7, 80], [3, 30]]  # [7, 80] for dsec, [3, 30] for mvsec outdoor_day1
+  mask_by_events: [false]  # mask by events, true for mvsec depth
+  cut_offs: [null]  # in meters (10, 20, 30 for mvsec) or null (dsec), for mae

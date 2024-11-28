@@ -8,7 +8,7 @@ from . import callbacks
 
 
 class Train(LightningModule):
-    def __init__(self, network, transform, loss_functions, optimizer, scheduler, override_pose):
+    def __init__(self, network, transform, loss_functions, optimizer, scheduler):
         super().__init__()
 
         self.network = network
@@ -17,13 +17,17 @@ class Train(LightningModule):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.automatic_optimization = False  # manual because tbptt
-        self.override_pose = override_pose
 
     def setup(self, stage):
         # trace lazy modules if training (always for litmodule Train?)
         if stage == "fit":
             x = torch.zeros(self.trainer.datamodule.train_frame_shape, device=self.device)
             self.network.trace(x)
+
+        # print parameter count per module
+        # for name, module in self.network.named_modules():
+        #     n_params = sum(p.numel() for p in module.parameters())
+        #     print(f"{name}: {n_params}")
 
         # NOTE: not helping!
         # # compile network
@@ -43,6 +47,13 @@ class Train(LightningModule):
             [isinstance(cb, (callbacks.LiveVisualizer, callbacks.ImageLogger)) for cb in self.trainer.callbacks]
         )
 
+        # self.counter = 0
+        # with open("logs/rsat_0.txt", "r") as f:
+        #     self.rsat_0 = [float(line.strip()) for line in f.readlines()]
+        # with open("logs/mae_0.txt", "r") as f:
+        #     self.mae_0 = [float(line.strip()) for line in f.readlines()]
+        # print(len(self.rsat_0), len(self.mae_0))
+
     def shared_step(self, batch, batch_idx, stage):
         # training: get optimizer because manual optimization
         if stage == "train":
@@ -58,6 +69,12 @@ class Train(LightningModule):
         else:
             pose_gt = None
 
+        # if has targets
+        if "targets" in batch:
+            targets = batch.targets
+        else:
+            targets = None
+
         # go over sequence
         log_seq = OrderedDict()
         for i, (frame, eof) in enumerate(zip(frames, eofs)):
@@ -67,41 +84,81 @@ class Train(LightningModule):
             aux = DotMap({k: v[i] for k, v in auxs.items()})
 
             # forward network
-            # if flow net, this is flow; else (disparity, pose)
+            # if flow net, this is flow; else (depth/disparity, pose)
             yhat = self.network(frame)
 
             # transform network output
             if self.transform is not None:
                 if len(yhat) == 2:
-                    disparity, pose = yhat
+                    depth, pose = yhat
                 elif len(yhat) == 3:
-                    disparity, pose, _ = yhat
+                    depth, pose, _ = yhat
 
                 # override pose estimation if desired
-                if self.override_pose and pose_gt is not None:
-                    pose_override = pose_gt[i]
-                    yhat_list = list(yhat)
-                    yhat_list[1][:, :3] = pose_override[:, :3]  # hardcoded for now: override rotation only
-                    yhat = tuple(yhat_list)
+                # if self.override_pose and pose_gt is not None:
+                #     pose = pose_gt[i]
+                #     yhat_list = list(yhat)
+                #     yhat_list[1] = pose
+                #     yhat = tuple(yhat_list)
+                if "gt_rotation" in aux:
+                    _, translation = pose.split([3, 3], dim=-1)
+                    # rmat = self.transform.rodrigues(angle)
+                    # angle = R.from_matrix(rmat.cpu().numpy()).as_euler("xyz", degrees=True)
+                    # angle = R.from_rotvec(axisangle.cpu().numpy()).as_euler("xyz", degrees=True)
+                    # gt_angle = R.from_rotvec(aux.gt_rotation.cpu().numpy()).as_euler("xyz", degrees=True)
+                    # gt_angle = aux.gt_rotation
+                    # gt_rmat = self.transform.rodrigues(gt_angle)
+                    # gt_angle = R.from_matrix(gt_rmat.cpu().numpy()).as_euler("xyz", degrees=True)
+                    pose = torch.cat([aux.gt_rotation, translation], dim=-1)
+                    yhat = tuple([yhat[0], pose])
+                    # log["/rotation_x"] = angle[:, 0].item()
+                    # log["/rotation_y"] = angle[:, 1].item()
+                    # log["/rotation_z"] = angle[:, 2].item()
+                    # log["/rotation_gt_x"] = gt_angle[:, 0].item()
+                    # log["/rotation_gt_y"] = gt_angle[:, 1].item()
+                    # log["/rotation_gt_z"] = gt_angle[:, 2].item()
 
                 flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
-                self.log(f"{stage}/depth_std", disparity.std(), batch_size=1)
+                if self.network.mode == "depth":
+                    # depth = self.transform.clip_depth(depth)
+                    disparity = self.transform.depth_to_disparity(depth)  # TODO: also scaling?
+                elif self.network.mode == "disparity":
+                    disparity, depth = self.transform.disparity_to_depth(depth)
+                self.log(f"{stage}/depth_std", depth.std(), batch_size=1, prog_bar=True)
             else:
-                disparity, pose = None, None
+                depth, disparity, pose = None, None, None
                 flow = yhat
 
-            # log model prediction
-            self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1)
+            # log model prediction and avg event count
+            self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1, prog_bar=True)
+            # self.log(f"{stage}/event_count", aux.counts.float().mean(), batch_size=1, prog_bar=True)
 
             # add to log if visualizing
             if self.visualizing:
                 log[f"{stage}/events"] = frame
                 log[f"{stage}/flow"] = flow
+                log[f"{stage}/flow_raw"] = flow
                 if self.transform is not None:
                     log[f"{stage}/disparity"] = disparity
+                    log[f"{stage}/disparity_raw"] = disparity
                     log[f"{stage}/pose"] = pose
                 if pose_gt is not None:
-                    log["/pose_gt"] = pose_gt[i]  # val requires remove of unsqueeze
+                    log["/pose_gt"] = pose_gt[i].unsqueeze(0)
+                if targets is not None:
+                    if targets[i].get("gt_depth") is not None:
+                        log[f"{stage}/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
+                    elif targets[i].get("gt_disparity") is not None:
+                        log[f"{stage}/disparity_gt"] = targets[i].gt_disparity
+                    if targets[i].get("gt_color") is not None:
+                        log[f"{stage}/color_gt"] = targets[i].gt_color
+                    if targets[i].get("depth_pred") is not None:
+                        log[f"{stage}/disparity_pred"] = self.transform.depth_to_disparity(targets[i].depth_pred)
+                    if targets[i].get("yaw_rate") is not None:
+                        log[f"{stage}/yaw_rate"] = targets[i].yaw_rate.item()
+                    if targets[i].get("yaw_rate_pred") is not None:
+                        log[f"{stage}/yaw_rate_pred"] = targets[i].yaw_rate_pred.item()
+                    if targets[i].get("status") is not None:
+                        log[f"{stage}/status"] = targets[i].status.item()
 
             # go over loss functions
             loss = 0
@@ -113,6 +170,13 @@ class Train(LightningModule):
                     loss_fn(frame, disparity)
                 elif name in ["scale_consistency"]:
                     loss_fn(disparity, pose, batch.K_rect)
+                elif targets and name in ["depth_disparity"]:
+                    if targets[i].get("gt_depth") is not None:
+                        loss_fn(frame, depth, targets[i].gt_depth)
+                    elif targets[i].get("gt_disparity") is not None:
+                        loss_fn(frame, disparity, targets[i].gt_disparity)
+                    elif targets[i].get("eval_disparity_id") is not None:
+                        loss_fn(frame, disparity, targets[i].eval_disparity_id)
 
                 # add to log if visualizing
                 if self.visualizing:
@@ -140,6 +204,7 @@ class Train(LightningModule):
                 self.network.detach()
 
             # go over loss functions
+            # rsat, mae = 0, 0
             for name, loss_fn in self.loss_functions[stage].items():
                 # reset if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
@@ -150,8 +215,27 @@ class Train(LightningModule):
                         if stage == "train" and value:
                             self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
                         elif stage == "validate" and value:
-                            self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
-                            self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
+                            if name.startswith("depth_disparity") and isinstance(value, tuple):
+                                log[name] = value
+                            if name.startswith("mae"):
+                                log[name] = value
+                            if name.startswith("hist"):
+                                log[name] = value
+                            if isinstance(value, (torch.Tensor, float, int)):  # if loggable
+                                self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
+                                self.log(f"{stage}/{name}/mean", value, batch_size=1)
+                        elif stage == "test" and value:
+                            if name.startswith("depth_disparity") and isinstance(value, tuple):
+                                log[name] = value
+                            else:
+                                self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
+                                self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
+
+            # with open("logs/rsat_0.txt", "a") as f:
+            #     f.write(f"{rsat}\n")
+            # with open("logs/mae_0.txt", "a") as f:
+            #     f.write(f"{mae}\n")
+            # self.counter += 1
 
             # reset if end of sequence
             if any(eof):
@@ -159,13 +243,16 @@ class Train(LightningModule):
                 for loss_fn in self.loss_functions[stage].values():
                     loss_fn.reset()
 
-        return log_seq if self.visualizing else None
+        return log_seq if self.visualizing or stage == "test" else None
 
     def training_step(self, batch, batch_idx):
         return self.shared_step(batch, batch_idx, "train")
 
     def validation_step(self, batch, batch_idx):
         return self.shared_step(batch, batch_idx, "validate")
+
+    def test_step(self, batch, batch_idx):
+        return self.shared_step(batch, batch_idx, "test")
 
     def configure_optimizers(self):
         # split gradient clipping from optimizer

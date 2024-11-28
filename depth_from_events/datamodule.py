@@ -213,7 +213,7 @@ class FrameSequence:
             K_rect[1, 2] = (bottom - top - 1) - K_rect[1, 2]
         if "flip_lr" in self.augmentation:
             K_rect[0, 2] = (right - left - 1) - K_rect[0, 2]
-        inv_K_rect = torch.linalg.pinv(K_rect)
+        inv_K_rect = torch.linalg.inv(K_rect)
 
         # return dotmap
         sample = DotMap()

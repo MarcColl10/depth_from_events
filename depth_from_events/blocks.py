@@ -5,6 +5,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# class WideLazyConv2d(nn.LazyConv2d):
+#     def reset_parameters(self) -> None:
+#         if not self.has_uninitialized_params() and self.in_channels != 0:
+#             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+#             bound = (1 / math.sqrt(fan_in)) * 3
+#             nn.init.uniform_(self.weight, -bound, bound)
+#             if self.bias is not None:
+#                 nn.init.uniform_(self.bias, -bound, bound)
+
+
 class LazyConvGru(nn.Module):
     """
     Concat gates instead of input.
@@ -183,10 +193,15 @@ def conv_encoder2(out_channels, activation_fn, padding_mode="zeros"):
 def upsample_decoder(out_channels, activation_fn, final_bias, padding_mode="zeros", mode="flow"):
     """
     Select between flow (2-channel, identity)
-    and disparity (1-channel, sigmoid) decoder.
+    and depth/disparity (1-channel, softplus/sigmoid) decoder.
     """
     final_channels = 2 if mode == "flow" else 1
-    final_activation = nn.Identity() if mode == "flow" else nn.Softplus()
+    if mode == "flow":
+        final_activation = nn.Identity()
+    elif mode == "depth":
+        final_activation = nn.Softplus()
+    elif mode == "disparity":
+        final_activation = nn.Sigmoid()
     decoder = named_sequential(
         "dec",
         feedforward(

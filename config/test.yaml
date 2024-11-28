@@ -1,0 +1,18 @@
+defaults:
+  - hydra: no_logging
+  - loss_functions@loss_functions.test:
+    - depth_disparity
+  - callbacks:
+    - store_dsec_eval_disp
+  - _self_
+
+wandb:
+  entity: dfe-cvpr25
+  project: depth_from_events
+
+stage: test
+name: ${stage}_${runid}_${checkpoint}
+runid: ???
+checkpoint: latest
+
+deletes: []

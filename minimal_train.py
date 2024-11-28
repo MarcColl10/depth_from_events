@@ -1,8 +1,10 @@
 from pathlib import Path
+import time
 
 from dotmap import DotMap  # TODO: move to tensordict
 import hydra
 from hydra.utils import instantiate
+import numpy as np
 from omegaconf import OmegaConf
 from rich.progress import Progress, BarColumn, TextColumn, TaskProgressColumn, TimeRemainingColumn
 import torch
@@ -20,6 +22,8 @@ Some comments:
 - Even when using unwrapped version of disparity net (see commented code), still warning about CUDAGraphs
 - On Orin: 40s for 6400 network forwards including learning, so ~160 Hz, varying GPU utilization, between 60-100%
 """
+
+torch.serialization.add_safe_globals([DotMap])
 
 
 # from https://stackoverflow.com/questions/6027558/flatten-nested-dictionaries-compressing-keys
@@ -43,11 +47,23 @@ def main(config):
     # torch.backends.cudnn.benchmark = False
 
     # dataset and dataloader
-    dataset = instantiate(config.dataset, dtype=dtype)
+    dataset = instantiate(config.dataset)
     dataloader = instantiate(config.dataloader, dataset)
 
     # network, trace to get parameter shapes of lazy modules
     network = instantiate(config.network)
+    if config.checkpoint is not None:
+        state_dict = torch.load(config.checkpoint, weights_only=True, map_location="cpu")["state_dict"]
+        if "state_dict_maps" in config:  # temporary
+            new_state_dict = {}
+            for key in state_dict:
+                new_key = key
+                for before, after in config.state_dict_maps.items():
+                    if before in key:
+                        new_key = new_key.replace(before, after)
+                new_state_dict[new_key] = state_dict[key]
+            state_dict = new_state_dict
+        network.load_state_dict(state_dict)
     network.to(device, dtype)
     # with torch.no_grad():
     #     _, memory = network(torch.zeros(1, 2, *dataset.sensor_size, device=device, dtype=dtype))
@@ -57,7 +73,8 @@ def main(config):
 
     # compile network
     # network = torch.compile(network, fullgraph=True, mode="max-autotune")
-    network = torch.compile(network, fullgraph=True, mode="reduce-overhead")
+    if config.trainer.compile:
+        network = torch.compile(network, fullgraph=True, mode="reduce-overhead")
 
     # disparity + pose to flow transform
     transform = instantiate(config.transform)
@@ -67,7 +84,8 @@ def main(config):
     # init of grid necessary for compilation
     # TODO: eventually combine transform and network into one module
     transform.init_grid(1, *dataset.sensor_size, device, dtype)
-    transform = torch.compile(transform, fullgraph=True, mode="reduce-overhead")
+    if config.trainer.compile:
+        transform = torch.compile(transform, fullgraph=True, mode="reduce-overhead")
 
     # loss function, optimizer, grad clipping
     loss_function = instantiate(config.loss_function)
@@ -97,11 +115,57 @@ def main(config):
         TaskProgressColumn(show_speed=True),
         TimeRemainingColumn(elapsed_when_finished=True),
     ]
+
+    cuda_compile_dict = torch.load(config.cuda_compile_dict, weights_only=True)
+    frames = cuda_compile_dict["frames"]
+    auxs = cuda_compile_dict["auxs"]
+    K_rect = cuda_compile_dict["K_rect"]
+    inv_K_rect = cuda_compile_dict["inv_K_rect"]
+
+    # loop over steps in chunk
+    for j, frame in enumerate(frames):
+        # get auxiliary: events and counts
+        aux = DotMap({k: v[j] for k, v in auxs.items()})
+
+        # forward network
+        # disparity net, so (disparity, pose)
+        yhat = network(frame)
+
+        # transform to flow
+        flow = transform(yhat, K_rect, inv_K_rect)
+
+        # forward loss function
+        loss_function(frame, aux, flow)
+
+        # backward if enough passes
+        # detach network after optimizer step (tbptt)
+        if loss_function.passes == loss_function.accumulation_window:
+            loss = loss_function.backward()
+            if loss is not None:
+                optimizer.zero_grad()
+                loss.backward()
+
+                clip_grad(network.parameters())
+                network.detach()
+            loss_val = loss_function.compute_and_reset().get("cmax", 0)
+
+    print("Finished the CUDA graph, resetting dataloader and network states")
+
+    # reset dataloader (not necessary when this is run in-the-loop)
+    dataloader = instantiate(config.dataloader, dataset)
+
+    # reset network states and gradients
+    network.zero_grad()
+
+    # reset network state to zero (not reset because that slows down the first batch)
+    network.state[0].zero_()
+
     with Progress(*columns, speed_estimate_period=10) as progress:
         global_step_task = progress.add_task("[cyan]step: 0 loss: 0.000", total=config.trainer.n_steps)
 
         # train for certain amount of steps
         global_step = 0
+        times = []
         while True:
 
             # loop over chunks of recording
@@ -119,6 +183,11 @@ def main(config):
                     # get auxiliary: events and counts
                     aux = DotMap({k: v[j] for k, v in auxs.items()})
 
+                    # t0
+                    torch.cuda.synchronize()
+                    times.append([])
+                    t0 = time.time()
+
                     # forward network
                     # disparity net, so (disparity, pose)
                     yhat = network(frame)
@@ -134,7 +203,11 @@ def main(config):
                     # backward if enough passes
                     # detach network after optimizer step (tbptt)
                     if loss_function.passes == loss_function.accumulation_window:
+                        torch.cuda.synchronize()
+                        t0_learn = time.time()
                         loss = loss_function.backward()
+                        torch.cuda.synchronize()
+                        t1_learn = time.time()
                         if loss is not None:
                             optimizer.zero_grad()
                             loss.backward()
@@ -144,12 +217,16 @@ def main(config):
                             # memory.detach_()
                         loss_val = loss_function.compute_and_reset().get("cmax", 0)
 
+                        torch.cuda.synchronize()
+                        t2_learn = time.time()
+
                         # step logging
                         global_step += loss_function.accumulation_window
                         writer.add_scalar("loss", loss_val, global_step)
                         if global_step % 1000 == 0:
                             event_image = event_frame_to_image(frame[0].cpu())
-                            disparity_image = disparity_map_to_image(yhat[0][0].detach().cpu())
+                            disparity = transform.depth_to_disparity(yhat[0][0].detach().cpu())
+                            disparity_image = disparity_map_to_image(disparity)
                             flow_image = flow_map_to_image(flow[0].detach().cpu())
                             writer.add_image("events", event_image, global_step, dataformats="HWC")
                             writer.add_image("disparity", disparity_image, global_step, dataformats="HWC")
@@ -162,6 +239,14 @@ def main(config):
                         if global_step >= config.trainer.n_steps:
                             break
 
+                        times[-1].append(t1_learn - t0_learn)
+                        times[-1].append(t2_learn - t1_learn)
+
+                    # t1
+                    torch.cuda.synchronize()
+                    t1 = time.time()
+                    times[-1].append(t1 - t0)
+
                     # pretend theres no end of sequence, no resetting
                     # if we drop incomplete batches this is fine
 
@@ -172,6 +257,26 @@ def main(config):
             else:
                 continue
             break
+
+    # print times
+    fw_times = []
+    fw_nobw_times = []
+    fwbw_times = []
+    loss_times = []
+    bw_times = []
+    for t in times:
+        if len(t) == 1:
+            fw_times.append(t[-1])
+        elif len(t) == 3:
+            fwbw_times.append(t[-1])
+            fw_nobw_times.append(t[-1] - t[-2] - t[-3])
+            bw_times.append(t[-2])
+            loss_times.append(t[-3])
+    print(f"avg ms only fw: {np.mean(fw_times) * 1000:.2f} ms")
+    print(f"avg ms fw without bw: {np.mean(fw_nobw_times) * 1000:.2f} ms")
+    print(f"avg ms fw and bw: {np.mean(fwbw_times) * 1000:.2f} ms")
+    print(f"avg ms bw: {np.mean(bw_times) * 1000:.2f} ms")
+    print(f"avg ms loss: {np.mean(loss_times) * 1000:.2f} ms")
 
     # save model
     torch.save(network.state_dict(), f"{writer.log_dir}/network_trained.pt")

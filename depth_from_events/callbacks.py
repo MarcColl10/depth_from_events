@@ -1,4 +1,9 @@
+from pathlib import Path
+import shutil
+
+import cv2
 from lightning.pytorch.callbacks import Callback
+import numpy as np
 
 from .visualizer import ImageVisualizer, RerunVisualizer
 
@@ -21,12 +26,26 @@ class LiveVisualizer(Callback):
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
             # things with flow
-            for k in [k for k in output.keys() if k.endswith("flow")]:
-                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "flow" in k]:
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
             for k in [k for k in output.keys() if "disparity" in k]:
-                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    if isinstance(output[k], tuple):
+                        self.visualizer.disparity_map(output[k][1][0].detach().cpu(), name=k)
+                        self.visualizer.disparity_map(output[k][0][0].detach().cpu(), name=f"gt_{k}")
+                    else:
+                        self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+
+            # things with color
+            for k in [k for k in output.keys() if "color" in k]:
+                self.visualizer.color_image(output[k][0].detach().cpu(), name=k)
 
             # things with pose
             for k in [k for k in output.keys() if "pose" in k]:
@@ -35,6 +54,11 @@ class LiveVisualizer(Callback):
             # for scalar values
             for k in [k for k in output.keys() if isinstance(output[k], (int, float))]:
                 self.visualizer.log_scalar(k, output[k])
+
+            # for histograms
+            for k in [k for k in output.keys() if k.startswith("hist")]:
+                self.visualizer.log_tensor(f"{k}_gt", output[k][0].hist)
+                self.visualizer.log_tensor(k, output[k][1].hist)
 
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
@@ -56,15 +80,61 @@ class ImageLogger(Callback):
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
             # things with flow
-            for k in [k for k in output.keys() if k.endswith("flow")]:
-                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "flow" in k]:
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
             for k in [k for k in output.keys() if "disparity" in k]:
-                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                if "raw" in k:
+                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+                else:
+                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+
+            # color images
+            for k in [k for k in output.keys() if "color" in k]:
+                self.visualizer.color_image(output[k][0].detach().cpu(), name=k)
+
+            # for scalar values
+            for k in [k for k in output.keys() if isinstance(output[k], (int, float))]:
+                self.visualizer.scalar(k, output[k])
 
     def on_train_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
 
     def on_validation_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
+
+
+class StoreDsecEvalDisparity(Callback):
+    """
+    Write DSEC evaluation results to the file structure given in https://dsec.ifi.uzh.ch/disparity-submission-format/.
+    """
+
+    def __init__(self, output_dir):
+        super().__init__()
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def on_test_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
+        for output in outputs.values():
+
+            disparity_keys = [key for key in output.keys() if key.startswith("depth_disparity")]
+
+            for key in disparity_keys:
+                rec = batch.recording
+                eval_id, eval_disparity = output[key]
+                eval_disparity = eval_disparity.cpu().numpy()
+
+                # format following https://dsec.ifi.uzh.ch/disparity-submission-format/
+                disp = eval_disparity.astype(np.float64).squeeze((0, 1))  # remove batch and channel dim
+                formatted_disp = (disp * 256).astype(np.uint16)
+
+                # write to file
+                (self.output_dir / key / rec).mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(self.output_dir / key / rec / f"{eval_id:06d}.png"), formatted_disp)
+
+    def on_test_epoch_end(self, trainer, litmodule):
+        shutil.make_archive(self.output_dir, "zip", self.output_dir)
