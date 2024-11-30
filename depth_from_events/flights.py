@@ -14,7 +14,13 @@ from scipy.spatial.transform import Rotation as R
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 
-from .data_utils import batched, ConcatBatchSampler, InfiniteDataLoader, only_add_batch_dim, time_first_collate
+from depth_from_events.data_utils import (
+    batched,
+    ConcatBatchSampler,
+    InfiniteDataLoader,
+    only_add_batch_dim,
+    time_first_collate,
+)
 
 
 @dataclass

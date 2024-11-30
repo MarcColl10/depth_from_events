@@ -1,4 +1,4 @@
-from .depth_disparity import DepthDisparityToFlow
+from depth_from_events.depth_disparity import DepthDisparityToFlow
 
 
 class DisparityToFlow(DepthDisparityToFlow):

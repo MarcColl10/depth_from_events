@@ -10,9 +10,15 @@ import numpy as np
 import torch
 from torch.utils.data import ConcatDataset, DataLoader
 
-from .data_utils import batched, ConcatBatchSampler, InfiniteDataLoader, only_add_batch_dim, time_first_collate
-from .dsec import DSEC_TRAIN_RECORDINGS, DSEC_VAL_RECORDINGS
-from .uzh_fpv import UZH_FPV_TRAIN_RECORDINGS, UZH_FPV_VAL_RECORDINGS
+from depth_from_events.data_utils import (
+    batched,
+    ConcatBatchSampler,
+    InfiniteDataLoader,
+    only_add_batch_dim,
+    time_first_collate,
+)
+from depth_from_events.dsec import DSEC_TRAIN_RECORDINGS, DSEC_VAL_RECORDINGS
+from depth_from_events.uzh_fpv import UZH_FPV_TRAIN_RECORDINGS, UZH_FPV_VAL_RECORDINGS
 
 
 @dataclass

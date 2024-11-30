@@ -4,7 +4,7 @@ from dotmap import DotMap
 from lightning import LightningModule
 import torch
 
-from . import callbacks
+from depth_from_events import callbacks
 
 
 class Train(LightningModule):

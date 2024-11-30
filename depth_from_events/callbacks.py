@@ -5,7 +5,7 @@ import cv2
 from lightning.pytorch.callbacks import Callback
 import numpy as np
 
-from .visualizer import ImageVisualizer, RerunVisualizer
+from depth_from_events.visualizer import ImageVisualizer, RerunVisualizer
 
 
 class LiveVisualizer(Callback):

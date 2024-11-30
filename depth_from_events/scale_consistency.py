@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .disparity import DisparityToFlow
+from depth_from_events.disparity import DisparityToFlow
 
 
 class ScaleConsistency(nn.Module):

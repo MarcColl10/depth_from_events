@@ -7,9 +7,9 @@ from PIL import Image
 import rerun as rr
 import rerun.blueprint as rrb
 
-from .data_utils import batched
-from .disparity import DisparityToFlow
-from .visualizer_utils import disparity_map_to_image, event_frame_to_image, flow_map_to_image
+from depth_from_events.data_utils import batched
+from depth_from_events.disparity import DisparityToFlow
+from depth_from_events.visualizer_utils import disparity_map_to_image, event_frame_to_image, flow_map_to_image
 
 
 class RerunVisualizer:

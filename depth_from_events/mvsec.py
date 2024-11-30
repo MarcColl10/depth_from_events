@@ -16,7 +16,13 @@ import torch
 from torch.utils.data import ConcatDataset, DataLoader
 import yaml
 
-from .data_utils import batched, ConcatBatchSampler, InfiniteDataLoader, only_add_batch_dim, time_first_collate
+from depth_from_events.data_utils import (
+    batched,
+    ConcatBatchSampler,
+    InfiniteDataLoader,
+    only_add_batch_dim,
+    time_first_collate,
+)
 
 
 @dataclass
