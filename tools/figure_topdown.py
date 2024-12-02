@@ -12,14 +12,11 @@ if __name__ == "__main__":
     parser.add_argument("h5")
     parser.add_argument("mp4")
     parser.add_argument("csv")
-    parser.add_argument("start", type=int)
-    parser.add_argument("stop", type=int)
     parser.add_argument("output")
     args = parser.parse_args()
 
     # Show the image of cyberzoo top view and undistort it.
     # Load one frame of video .mp4 file
-    # cap = cv2.VideoCapture("data/figures/vlc-record-2024-11-14-11h34m45s-rtsp___192.168.209.102_live1s1.sdp-.mp4")
     cap = cv2.VideoCapture(args.mp4)
     ret, img = cap.read()
     cap.release()
@@ -37,17 +34,20 @@ if __name__ == "__main__":
 
     pad = 0
     # pad = 120
-    src_points = np.float32([[x1 - pad, y1 - pad], [x2 + pad, y2 - pad], [x3 + pad, y3 + pad], [x4 - pad, y4 + pad]])
+    src_points = np.array(
+        [[x1 - pad, y1 - pad], [x2 + pad, y2 - pad], [x3 + pad, y3 + pad], [x4 - pad, y4 + pad]], dtype=np.float32
+    )
 
     pad = 80
     # Define the points in the "destination" perspective, a rectangle with straight lines
-    dst_points = np.float32(
+    dst_points = np.array(
         [
             [pad * wh_ratio, pad],
             [width - pad * wh_ratio, pad],
             [width - pad * wh_ratio, height - pad],
             [pad * wh_ratio, height - pad],
-        ]
+        ],
+        dtype=np.float32,
     )
 
     # Compute the perspective transformation matrix
@@ -86,7 +86,6 @@ if __name__ == "__main__":
     # Plot the X,Y coordinates of the drone on the image from Optitrack
     # Load the .csv file with optitrack data
     data = pd.read_csv(
-        # "data/figures/Take 2024-11-14 08.13.27 AM.csv",
         args.csv,
         delimiter=",",
         index_col=0,
@@ -104,7 +103,6 @@ if __name__ == "__main__":
 
     # Determine where obstacle avoidance was active and mark in the plot.
     # Load rosbag with h5py
-    # f = h5py.File("data/raw/flights/rosbag2_2024-11-14-08-12-43_0.h5")
     f = h5py.File(args.h5)
 
     control_values = f["control"]
@@ -127,9 +125,6 @@ if __name__ == "__main__":
     # stop = merged_df[merged_df["Y"] > 100].index[-1]
 
     # Plot the merged data
-    # start, stop = 28000, 209000
-    start = args.start
-    stop = args.stop
     plt.plot(merged_df["Y"])
     plt.axvline(start, color="r")
     plt.axvline(stop, color="r")

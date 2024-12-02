@@ -3,5 +3,6 @@ artifacts/
 data/
 logs/
 runs/
+figures/
 __pycache__/
 .vscode/
