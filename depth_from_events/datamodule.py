@@ -17,8 +17,8 @@ from depth_from_events.data_utils import (
     only_add_batch_dim,
     time_first_collate,
 )
-from depth_from_events.dsec import DSEC_TRAIN_RECORDINGS, DSEC_VAL_RECORDINGS
-from depth_from_events.uzh_fpv import UZH_FPV_TRAIN_RECORDINGS, UZH_FPV_VAL_RECORDINGS
+from depth_from_events.get_dsec import DSEC_TRAIN_RECORDINGS, DSEC_VAL_RECORDINGS
+from depth_from_events.get_uzh_fpv import UZH_FPV_TRAIN_RECORDINGS, UZH_FPV_VAL_RECORDINGS
 
 
 @dataclass

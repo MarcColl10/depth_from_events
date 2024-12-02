@@ -454,7 +454,8 @@ class FlightSequence:
 
 
 class FlightDataModule(LightningDataModule):
-    gt = ["depth", "color", "depth_pred", "yaw_rate", "yaw_rate_pred", "status"]
+    # gt = ["depth", "color", "depth_pred", "yaw_rate", "yaw_rate_pred", "status"]
+    gt = ["depth", "color"]
 
     def __init__(
         self,

@@ -135,7 +135,7 @@ class Train(LightningModule):
                     log[f"{stage}/disparity_raw"] = disparity
                     log[f"{stage}/pose"] = pose
                 if pose_gt is not None:
-                    log[f"{stage}/pose_gt"] = pose_gt[i].unsqueeze(0)
+                    log[f"{stage}/pose_gt"] = pose_gt[i]
                 if targets is not None:
                     if targets[i].get("gt_depth") is not None:
                         log[f"{stage}/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
