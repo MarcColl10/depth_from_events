@@ -321,11 +321,6 @@ class DsecDataModule(DataModule):
     val_recordings = DSEC_VAL_RECORDINGS
 
 
-class FlightsDataModule(DataModule):
-    train_recordings = ["rosbag2_2024-10-29-18-06-51_0"]
-    val_recordings = ["rosbag2_2024-10-29-18-06-51_0"]
-
-
 if __name__ == "__main__":
     from rich.progress import track
 

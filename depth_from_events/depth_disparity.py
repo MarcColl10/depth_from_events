@@ -181,7 +181,6 @@ class DepthDisparityMetrics(nn.Module):
         self.accumulation_window = 1  # always backward
         self.metrics = metrics
         self.scales = scales
-        # self.clamps = clamps
         self.mask_by_events = mask_by_events
         self.cut_offs = cut_offs
 
@@ -242,7 +241,6 @@ class DepthDisparityMetrics(nn.Module):
                 for scale, map_ in scaled_pred_maps.items():
                     # go over all masks
                     for mask_name, mask in gt_masks.items():
-                        # depth_map = depth_map.clamp(*clamp)
                         mae = F.l1_loss(map_[mask], gt_map[mask], reduction="mean")
                         # for visualization only
                         map_v_ = map_.clone()

@@ -1,0 +1,14 @@
+defaults:
+  - hydra: no_logging
+  - _self_
+
+wandb:
+  entity: dfe-cvpr25
+  project: depth_from_events
+
+runid: ???
+checkpoint: latest
+local_state_dict: null
+save_dir: ???
+
+deletes: []

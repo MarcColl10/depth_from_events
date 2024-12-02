@@ -49,9 +49,6 @@ class RerunVisualizer:
         image = event_frame_to_image(frame)
         self.log_image(name, image, self.compression)
 
-    def raw_map(self, frame, name="raw"):
-        pass
-
     def flow_map(self, frame, name="flow"):
         image = flow_map_to_image(frame)
         self.log_image(name, image, self.compression)
@@ -130,7 +127,7 @@ class ImageVisualizer:
         image = event_frame_to_image(frame)
         self.save_image(name, image)
 
-    def raw_map(self, frame, name="raw"):
+    def nparray(self, frame, name="raw"):
         self.save_nparray(frame, name)
 
     def flow_map(self, frame, name="flow"):

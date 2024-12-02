@@ -3,7 +3,7 @@
 This repository contains the code for the paper "On-Device Self-Supervised Learning of Low-Latency Monocular Depth from Only Events", submitted to CVPR 2025. The code is structured as follows:
 - [`config`](config): configuration files
 - [`depth_from_events`](depth_from_events): main codebase
-- [`checkpoints`](checkpoints): model checkpoints
+- [`checkpoints`](checkpoints): model checkpoints and configs
 
 To download MVSEC/DSEC, use [`download_mvsec.sh`](download_mvsec.sh) and [`download_dsec.sh`](download_dsec.sh) respectively.
 
@@ -18,7 +18,7 @@ python train.py
 
 ## Evaluating checkpoints
 
-See the below commands for evaluating a specific checkpoint on a specific dataset. If you want visuals, add `+callbacks=live_vis` to the command.
+See the below commands for evaluating a specific checkpoint on a specific dataset. If you want visuals, add `+callbacks=live_vis` to the command; this will visualize things in [Rerun](https://rerun.io/).
 
 Running checkpoint on UZH-FPV:
 ```bash

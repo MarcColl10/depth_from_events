@@ -196,7 +196,6 @@ class Train(LightningModule):
                 self.network.detach()
 
             # go over loss functions
-            # rsat, mae = 0, 0
             for name, loss_fn in self.loss_functions[stage].items():
                 # reset if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:

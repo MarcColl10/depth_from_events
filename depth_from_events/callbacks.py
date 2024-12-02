@@ -26,22 +26,16 @@ class LiveVisualizer(Callback):
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
             # things with flow
-            for k in [k for k in output.keys() if "flow" in k]:
-                if "raw" in k:
-                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
-                else:
-                    self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "flow" in k and "raw" not in k]:
+                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
-            for k in [k for k in output.keys() if "disparity" in k]:
-                if "raw" in k:
-                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "disparity" in k and "raw" not in k]:
+                if isinstance(output[k], tuple):
+                    self.visualizer.disparity_map(output[k][1][0].detach().cpu(), name=k)
+                    self.visualizer.disparity_map(output[k][0][0].detach().cpu(), name=f"gt_{k}")
                 else:
-                    if isinstance(output[k], tuple):
-                        self.visualizer.disparity_map(output[k][1][0].detach().cpu(), name=k)
-                        self.visualizer.disparity_map(output[k][0][0].detach().cpu(), name=f"gt_{k}")
-                    else:
-                        self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
 
             # things with color
             for k in [k for k in output.keys() if "color" in k]:
@@ -66,6 +60,9 @@ class LiveVisualizer(Callback):
     def on_validation_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
 
+    def on_test_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
+        self.on_batch_end(outputs)
+
 
 class ImageLogger(Callback):
     def __init__(self, root_dir, keys, format):
@@ -79,19 +76,17 @@ class ImageLogger(Callback):
             for k in [k for k in output.keys() if "events" in k]:
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
 
+            # save as raw numpy array
+            for k in [k for k in output.keys() if "raw" in k]:
+                self.visualizer.nparray(output[k][0].detach().cpu().numpy(), name=k)
+
             # things with flow
-            for k in [k for k in output.keys() if "flow" in k]:
-                if "raw" in k:
-                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
-                else:
-                    self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "flow" in k and "raw" not in k]:
+                self.visualizer.flow_map(output[k][0].detach().cpu(), name=k)
 
             # things with disparity
-            for k in [k for k in output.keys() if "disparity" in k]:
-                if "raw" in k:
-                    self.visualizer.raw_map(output[k][0].detach().cpu(), name=k)
-                else:
-                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+            for k in [k for k in output.keys() if "disparity" in k and "raw" not in k]:
+                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
 
             # color images
             for k in [k for k in output.keys() if "color" in k]:
@@ -105,6 +100,9 @@ class ImageLogger(Callback):
         self.on_batch_end(outputs)
 
     def on_validation_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
+        self.on_batch_end(outputs)
+
+    def on_test_batch_end(self, trainer, litmodule, outputs, batch, batch_idx):
         self.on_batch_end(outputs)
 
 

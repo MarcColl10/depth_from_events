@@ -1,11 +1,10 @@
 defaults:
-  - datamodule: flights_single
+  - datamodule: uzh_fpv
   - litmodule: train
   - network: depth_pose
   - transform: depth_to_flow
   - loss_functions@loss_functions.train:
     - cmax_iter
-    # - ea_smooth
     - scale_consistency
   - loss_functions@loss_functions.validate:
     - cmax_iter
