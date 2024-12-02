@@ -576,7 +576,7 @@ class DsecDataModule(LightningDataModule):
 
 if __name__ == "__main__":
     datamodule = DsecDataModule(
-        root_dir="data/raw/dsec_old",
+        root_dir="data/raw/dsec",
         time_window=10000,  # us
         count_thresh=100000,
         train_seq_len=100,
