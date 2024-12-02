@@ -1,6 +1,5 @@
 from collections import OrderedDict
 
-from dotmap import DotMap
 from lightning import LightningModule
 import torch
 
@@ -47,13 +46,6 @@ class Train(LightningModule):
             [isinstance(cb, (callbacks.LiveVisualizer, callbacks.ImageLogger)) for cb in self.trainer.callbacks]
         )
 
-        # self.counter = 0
-        # with open("logs/rsat_0.txt", "r") as f:
-        #     self.rsat_0 = [float(line.strip()) for line in f.readlines()]
-        # with open("logs/mae_0.txt", "r") as f:
-        #     self.mae_0 = [float(line.strip()) for line in f.readlines()]
-        # print(len(self.rsat_0), len(self.mae_0))
-
     def shared_step(self, batch, batch_idx, stage):
         # training: get optimizer because manual optimization
         if stage == "train":
@@ -61,7 +53,13 @@ class Train(LightningModule):
             scheduler = self.lr_schedulers() if self.scheduler is not None else None
 
         # unpack
-        frames, auxs, eofs, rec = batch.frames, batch.auxs, batch.eofs, batch.recording
+        frames, auxs, targets, eofs, rec = (
+            batch["frames"],
+            batch["auxs"],
+            batch["targets"],
+            batch["eofs"],
+            batch["recording"],
+        )
 
         # if has gt pose
         if "pose" in batch:
@@ -69,19 +67,13 @@ class Train(LightningModule):
         else:
             pose_gt = None
 
-        # if has targets
-        if "targets" in batch:
-            targets = batch.targets
-        else:
-            targets = None
-
         # go over sequence
         log_seq = OrderedDict()
         for i, (frame, eof) in enumerate(zip(frames, eofs)):
-            log_seq[i] = DotMap()
+            log_seq[i] = dict()
             log = log_seq[i]
             # get auxiliary: events and counts
-            aux = DotMap({k: v[i] for k, v in auxs.items()})
+            aux = {k: v[i] for k, v in auxs.items()}
 
             # forward network
             # if flow net, this is flow; else (depth/disparity, pose)
@@ -118,7 +110,7 @@ class Train(LightningModule):
                     # log["/rotation_gt_y"] = gt_angle[:, 1].item()
                     # log["/rotation_gt_z"] = gt_angle[:, 2].item()
 
-                flow = self.transform(yhat, batch.K_rect, batch.inv_K_rect)
+                flow = self.transform(yhat, batch["K_rect"], batch["inv_K_rect"])
                 if self.network.mode == "depth":
                     # depth = self.transform.clip_depth(depth)
                     disparity = self.transform.depth_to_disparity(depth)  # TODO: also scaling?
@@ -143,7 +135,7 @@ class Train(LightningModule):
                     log[f"{stage}/disparity_raw"] = disparity
                     log[f"{stage}/pose"] = pose
                 if pose_gt is not None:
-                    log["/pose_gt"] = pose_gt[i].unsqueeze(0)
+                    log[f"{stage}/pose_gt"] = pose_gt[i].unsqueeze(0)
                 if targets is not None:
                     if targets[i].get("gt_depth") is not None:
                         log[f"{stage}/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
@@ -230,12 +222,6 @@ class Train(LightningModule):
                             else:
                                 self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
                                 self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
-
-            # with open("logs/rsat_0.txt", "a") as f:
-            #     f.write(f"{rsat}\n")
-            # with open("logs/mae_0.txt", "a") as f:
-            #     f.write(f"{mae}\n")
-            # self.counter += 1
 
             # reset if end of sequence
             if any(eof):

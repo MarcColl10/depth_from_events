@@ -41,8 +41,8 @@ class ContrastMaximization(nn.Module):
             event_frames = torch.stack(self.event_frames, dim=2)  # (b, c, d, h, w)
             events = extract_events_from_frames(event_frames)  # padded (b, n, 5)
         else:
-            counts = [aux.counts for aux in self.auxs]
-            events = [aux.events for aux in self.auxs]
+            counts = [aux["counts"] for aux in self.auxs]
+            events = [aux["events"] for aux in self.auxs]
             events = format_events(events, counts)  # padded (b, n, 5)
 
         # stack flows
@@ -82,10 +82,10 @@ class ContrastMaximization(nn.Module):
             accumulated_event_frame = torch.stack(self.event_frames, dim=2).sum(2)
             return accumulated_event_frame
         else:
-            counts = [aux.counts for aux in self.auxs]
-            events = [aux.events for aux in self.auxs]
+            counts = [aux["counts"] for aux in self.auxs]
+            events = [aux["events"] for aux in self.auxs]
             accumulated_events = format_events(events, counts, stack=True)  # padded (b, n, d, 5)
-            accumulated_events[..., 2] = accumulated_events[..., 2].floor()  # prevent trilinear splat
+            accumulated_events[..., 2] = accumulated_events[..., 3]  # prevent trilinear splat
             if not accumulated_events.numel():
                 return torch.zeros_like(self.event_frames[0])
             _, _, h, w = self.event_frames[0].shape

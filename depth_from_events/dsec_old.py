@@ -4,7 +4,6 @@ from functools import partial
 from pathlib import Path
 
 import cv2
-from dotmap import DotMap
 import h5py
 import hdf5plugin
 from lightning import LightningDataModule
@@ -63,8 +62,7 @@ class DsecSequence:
         assert not (self.augmentations is not None and self.gt)  # no augmentations on gt
 
         # open large h5 files only once
-        self.fs = DotMap()
-        self.fs.data = h5py.File(paths["data"], "r")
+        self.fs = h5py.File(paths["data"], "r")
 
         # store other paths for later
         self.paths = paths
@@ -94,7 +92,8 @@ class DsecSequence:
 
         # get duration of recording
         # don't get full t because of memory usage
-        self.t0, self.tk = self.fs.data["events/t"][[0, -1]] + self.fs.data["t_offset"][()]  # us
+        self.t0, self.tk = self.fs["events/t"][[0, -1]]  # us
+        self.t_offset = self.fs["t_offset"][()]  # us
         self.rec_duration = self.tk - self.t0
 
         # slice dataset, pre-compute crop and augmentation
@@ -106,7 +105,7 @@ class DsecSequence:
             self.crop_corners[3] - self.crop_corners[1],
         )
 
-        # mapping from chunks to single steps
+        # mapping from chunks to single slices
         # match seq_len if given
         self.chunk_size = self.seq_len if self.seq_len is not None else self.chunk_size
         self.chunk_map = batched(range(len(self.t_start)), self.chunk_size)
@@ -162,15 +161,14 @@ class DsecSequence:
         events, frames, counts, targets = [], [], [], []
         for i in chunk:
             # convert to indices
-            offset = self.fs.data["t_offset"][()]
-            start = bisect_left(self.fs.data["events/t"], self.t_start[i] - offset)
-            end = bisect_left(self.fs.data["events/t"], self.t_end[i] - offset)
+            start = bisect_left(self.fs["events/t"], self.t_start[i])
+            end = bisect_left(self.fs["events/t"], self.t_end[i])
 
             # get events as list
-            t = self.fs.data["events/t"][start:end]  # uint32
-            y = self.fs.data["events/y"][start:end]  # uint16
-            x = self.fs.data["events/x"][start:end]  # uint16
-            p = self.fs.data["events/p"][start:end]  # uint8 in {0, 1}
+            t = self.fs["events/t"][start:end]  # uint32
+            y = self.fs["events/y"][start:end]  # uint16
+            x = self.fs["events/x"][start:end]  # uint16
+            p = self.fs["events/p"][start:end]  # uint8 in {0, 1}
 
             # rectify list: forward rectification
             if self.rectify:
@@ -203,7 +201,7 @@ class DsecSequence:
                 x = x[:new_end]
                 p = p[:new_end]
 
-                new_t_end = self.fs.data["events/t"][start + new_end] + offset
+                new_t_end = self.fs["events/t"][start + new_end]
                 dt = self.t_end[i] - new_t_end
                 self.t_end[i:] -= dt
                 if i < len(self.t_start) - 1:
@@ -249,17 +247,15 @@ class DsecSequence:
             if "gt_disparity" in self.paths and "disparity" in self.gt:
                 gt_disparity_ts = np.loadtxt(self.paths["gt_disparity_ts"]).astype(np.int64)
                 gt_disparity_fs = sorted(self.paths["gt_disparity"].rglob("*.png"))
-                start = bisect_left(gt_disparity_ts, self.t_start[i])
-                end = bisect_left(gt_disparity_ts, self.t_end[i])
+                start = bisect_left(gt_disparity_ts, self.t_start[i] + self.t_offset)
+                end = bisect_left(gt_disparity_ts, self.t_end[i] + self.t_offset)
                 if end - start > 0:
-                    try:
-                        assert end - start == 1  # only one disparity map per event window
-                    except AssertionError:
+                    if end - start > 1:
                         print(f"Multiple depth maps in event window {i}, taking latest")
                         start = end - 1
                     gt_disparity_id = int(gt_disparity_fs[start].stem)
                     gt_disparity = cv2.imread(str(gt_disparity_fs[start]), cv2.IMREAD_ANYDEPTH)[None]
-                    gt_disparity = gt_disparity.astype(np.float64) / 256  # formatting as described in DSEC
+                    gt_disparity = gt_disparity.astype(np.float64) / 256  # formatting as described in dsec
                     gt_disparity = gt_disparity[..., top:bottom, left:right]  # crop
                 else:
                     gt_disparity = None
@@ -272,8 +268,8 @@ class DsecSequence:
             if "eval_disparity_ts" in self.paths and "eval_disparity" in self.gt:
                 eval_disparity_ts = np.loadtxt(self.paths["eval_disparity_ts"], delimiter=",").astype(np.int64)
                 eval_disparity_ts, eval_disparity_id = eval_disparity_ts.T
-                start = bisect_left(eval_disparity_ts, self.t_start[i])
-                end = bisect_left(eval_disparity_ts, self.t_end[i])
+                start = bisect_left(eval_disparity_ts, self.t_start[i] + self.t_offset)
+                end = bisect_left(eval_disparity_ts, self.t_end[i] + self.t_offset)
                 if end - start > 0:
                     assert end - start == 1
                     eval_disparity_id = int(eval_disparity_id[start])
@@ -287,11 +283,7 @@ class DsecSequence:
             frames.append(frame)
             counts.append(len(lst))
             targets.append(
-                DotMap(
-                    gt_disparity=gt_disparity,
-                    gt_disparity_id=gt_disparity_id,
-                    eval_disparity_id=eval_disparity_id,
-                )
+                dict(gt_disparity=gt_disparity, gt_disparity_id=gt_disparity_id, eval_disparity_id=eval_disparity_id)
             )
 
         # stack and pad
@@ -332,26 +324,24 @@ class DsecSequence:
         events = rfn.structured_to_unstructured(events, dtype=np.float32)
         events = torch.from_numpy(events)
         counts = torch.from_numpy(counts)
-        auxs = DotMap(events=events, counts=counts)
+        auxs = dict(events=events, counts=counts)
         targets = [
-            DotMap(
-                {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
-            )
+            {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
             for t in targets
         ]
         K_rect = torch.from_numpy(K_rect.astype(np.float32))
         inv_K_rect = torch.from_numpy(inv_K_rect.astype(np.float32))
 
-        # return dotmap
-        sample = DotMap()
-        sample.frames = frames.float()
-        sample.auxs = auxs
-        if self.gt:
-            sample.targets = targets
-        sample.recording = self.recording
-        sample.eofs = [i == len(self.t_start) - 1 for i in chunk]
-        sample.K_rect = K_rect
-        sample.inv_K_rect = inv_K_rect
+        # return dict
+        sample = dict(
+            frames=frames.float(),
+            auxs=auxs,
+            targets=targets if self.gt else None,
+            recording=self.recording,
+            eofs=[i == len(self.t_start) - 1 for i in chunk],
+            K_rect=K_rect,
+            inv_K_rect=inv_K_rect,
+        )
 
         return sample
 
@@ -582,3 +572,21 @@ class DsecDataModule(LightningDataModule):
             num_workers=self.num_workers // 2,
             collate_fn=only_add_batch_dim,
         )
+
+
+if __name__ == "__main__":
+    datamodule = DsecDataModule(
+        root_dir="data/raw/dsec_old",
+        time_window=10000,  # us
+        count_thresh=100000,
+        train_seq_len=100,
+        train_crop=None,
+        val_crop=None,
+        rectify=True,
+        augmentations=["backward", "polarity", "horizontal"],
+        batch_size=4,
+        shuffle=True,
+        num_workers=8,
+        download=True,
+    )
+    datamodule.prepare_data()

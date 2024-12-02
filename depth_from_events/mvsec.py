@@ -5,7 +5,6 @@ from pathlib import Path
 import zipfile
 
 import cv2
-from dotmap import DotMap
 from gdown import download_folder, download
 import h5py
 import hdf5plugin
@@ -58,16 +57,17 @@ class MvsecSequence:
         assert not (self.augmentations is not None and self.gt)  # no augmentations on gt
 
         # open large h5 files only once
-        self.fs = DotMap()
-        self.fs.data = h5py.File(paths["data"], "r")
-        self.fs.gt = h5py.File(paths["gt"], "r")
+        self.fs = dict(
+            data=h5py.File(paths["data"], "r"),
+            gt=h5py.File(paths["gt"], "r"),
+        )
 
         # forward rectification map
         # distorted -> rectified coords
         # provided map, easier than backward, but gives lines in frames due to nearest neighbor
         rect_map_x = np.loadtxt(paths["rect_map_x"])
         rect_map_y = np.loadtxt(paths["rect_map_y"])
-        self.fw_rect_map = np.stack([rect_map_y, rect_map_x], axis=-1)  # y_rect, x_rect = rect_map[y, x]
+        self.fw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)  # x_rect, y_rect = rect_map[y, x].T
 
         # backward rectification/undistortion map
         # rectified/undistorted -> distorted coords
@@ -87,7 +87,7 @@ class MvsecSequence:
 
         # get duration of recording
         # don't get full t because of memory usage
-        self.t0, self.tk = self.fs.data["davis/left/events"][[0, -1], 2]  # s
+        self.t0, self.tk = self.fs["data"]["davis/left/events"][[0, -1], 2]  # s
         if self.time is not None:
             t0, tk = self.time
             t0 = t0 + self.t0 if t0 is not None else self.t0
@@ -129,13 +129,6 @@ class MvsecSequence:
         self.t_start, self.t_end = linspace[:-1], linspace[1:]
         self.seq_duration = self.t_end[-1] - self.t_start[0]
 
-    def init_augmentation(self):
-        self.augmentation = []
-        if self.augmentations is not None:
-            for aug in self.augmentations:
-                if np.random.rand() < 0.5:
-                    self.augmentation.append(aug)
-
     def init_crop(self):
         if self.crop:
             if len(self.crop) == 2:  # height, width
@@ -147,6 +140,13 @@ class MvsecSequence:
                 self.crop_corners = self.crop
         else:
             self.crop_corners = (0, 0, *self.sensor_size)
+
+    def init_augmentation(self):
+        self.augmentation = []
+        if self.augmentations is not None:
+            for aug in self.augmentations:
+                if np.random.rand() < 0.5:
+                    self.augmentation.append(aug)
 
     def reset(self):
         self.init_slice()  # slice up dataset
@@ -167,20 +167,20 @@ class MvsecSequence:
         events, frames, counts, targets = [], [], [], []
         for i in chunk:
             # convert to indices
-            start = bisect_left(self.fs.data["davis/left/events"], self.t_start[i], key=lambda x: x[2])
-            end = bisect_left(self.fs.data["davis/left/events"], self.t_end[i], key=lambda x: x[2])
+            start = bisect_left(self.fs["data"]["davis/left/events"], self.t_start[i], key=lambda x: x[2])
+            end = bisect_left(self.fs["data"]["davis/left/events"], self.t_end[i], key=lambda x: x[2])
 
             # get events as list
-            t = self.fs.data["davis/left/events"][start:end, 2]  # float64, s
-            y = self.fs.data["davis/left/events"][start:end, 1]  # float64
-            x = self.fs.data["davis/left/events"][start:end, 0]  # float64
-            p = self.fs.data["davis/left/events"][start:end, 3]  # float64 in {-1, 1}
+            t = self.fs["data"]["davis/left/events"][start:end, 2]  # float64, s
+            y = self.fs["data"]["davis/left/events"][start:end, 1]  # float64
+            x = self.fs["data"]["davis/left/events"][start:end, 0]  # float64
+            p = self.fs["data"]["davis/left/events"][start:end, 3]  # float64 in {-1, 1}
 
             # rectify list: forward rectification
             if self.rectify:
-                y_rect, x_rect = self.fw_rect_map[y.astype(np.int64), x.astype(np.int64)].T
+                x_rect, y_rect = self.fw_rect_map[y.astype(np.int64), x.astype(np.int64)].T
             else:
-                y_rect, x_rect = y, x
+                x_rect, y_rect = x, y
 
             # list of events to structured array
             dtype = np.dtype([("t", np.float64), ("y", np.float32), ("x", np.float32), ("p", np.int8)])
@@ -228,21 +228,16 @@ class MvsecSequence:
 
             # gt depth
             if self.gt and "depth" in self.gt:
-                start = bisect_left(self.fs.gt["davis/left/depth_image_rect_ts"], self.t_start[i])
-                end = bisect_left(self.fs.gt["davis/left/depth_image_rect_ts"], self.t_end[i])
+                start = bisect_left(self.fs["gt"]["davis/left/depth_image_rect_ts"], self.t_start[i])
+                end = bisect_left(self.fs["gt"]["davis/left/depth_image_rect_ts"], self.t_end[i])
                 if end - start > 0:
-                    try:
-                        assert end - start == 1  # only one depth map per event_window
-                    except AssertionError:
-                        print(
-                            f"Multiple depth maps in event window {i}, taking latest"
-                        )  # happens with 20hz flow and gt time windows
+                    if end - start > 1:
+                        print(f"Multiple depth maps in event window {i}, taking latest")
                         start = end - 1
                     gt_depth_id = start + 1  # to prevent 0
-                    gt_depth = self.fs.gt["davis/left/depth_image_rect"][start:end]  # keep time dim as channel
+                    gt_depth = self.fs["gt"]["davis/left/depth_image_rect"][start:end]  # keep time dim as channel
                     gt_depth[..., 192:, :] = 0  # remove car bonnet for car recordings
-                    if self.crop is not None:
-                        gt_depth = gt_depth[..., top:bottom, left:right]  # crop
+                    gt_depth = gt_depth[..., top:bottom, left:right]  # crop
                     gt_depth[np.isnan(gt_depth)] = 0  # replace nans with 0
                 else:
                     gt_depth = None
@@ -255,14 +250,7 @@ class MvsecSequence:
             events.append(lst)
             frames.append(frame)
             counts.append(len(lst))
-            # targets.gt_depth += [gt_depth]
-            # targets.gt_depth_id += [gt_depth_id]
-            targets.append(
-                DotMap(
-                    gt_depth=gt_depth,
-                    gt_depth_id=gt_depth_id,
-                )
-            )
+            targets.append(dict(gt_depth=gt_depth, gt_depth_id=gt_depth_id))
 
         # stack and pad
         max_len = max(counts)
@@ -302,26 +290,24 @@ class MvsecSequence:
         events = rfn.structured_to_unstructured(events, dtype=np.float32)
         events = torch.from_numpy(events)
         counts = torch.from_numpy(counts)
-        auxs = DotMap(events=events, counts=counts)
+        auxs = dict(events=events, counts=counts)
         targets = [
-            DotMap(
-                {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
-            )
+            {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
             for t in targets
         ]
         K_rect = torch.from_numpy(K_rect.astype(np.float32))
         inv_K_rect = torch.from_numpy(inv_K_rect.astype(np.float32))
 
-        # return dotmap
-        sample = DotMap()
-        sample.frames = frames.float()
-        sample.auxs = auxs
-        if self.gt:
-            sample.targets = targets
-        sample.recording = self.recording
-        sample.eofs = [i == len(self.t_start) - 1 for i in chunk]
-        sample.K_rect = K_rect
-        sample.inv_K_rect = inv_K_rect
+        # return dict
+        sample = dict(
+            frames=frames.float(),
+            auxs=auxs,
+            targets=targets if self.gt else None,
+            recording=self.recording,
+            eofs=[i == len(self.t_start) - 1 for i in chunk],
+            K_rect=K_rect,
+            inv_K_rect=inv_K_rect,
+        )
 
         return sample
 
@@ -457,3 +443,22 @@ class MvsecDataModule(LightningDataModule):
             num_workers=self.num_workers // 2,
             collate_fn=only_add_batch_dim,
         )
+
+
+if __name__ == "__main__":
+    datamodule = MvsecDataModule(
+        root_dir="data/raw/mvsec",
+        time_window=0.01,  # s
+        train_seq_len=100,
+        train_crop=None,
+        val_recordings=None,
+        val_time=None,
+        val_crop=None,
+        rectify=True,
+        augmentations=["backward", "polarity", "horizontal"],
+        batch_size=8,
+        shuffle=True,
+        num_workers=8,
+        download=True,
+    )
+    datamodule.prepare_data()

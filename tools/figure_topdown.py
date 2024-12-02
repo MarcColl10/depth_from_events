@@ -126,7 +126,6 @@ if __name__ == "__main__":
     print(f"Stop index: {stop}")
     # stop = merged_df[merged_df["Y"] > 100].index[-1]
 
-
     # Plot the merged data
     # start, stop = 28000, 209000
     start = args.start

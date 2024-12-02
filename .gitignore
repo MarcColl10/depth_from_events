@@ -4,3 +4,4 @@ data/
 logs/
 runs/
 __pycache__/
+.vscode/

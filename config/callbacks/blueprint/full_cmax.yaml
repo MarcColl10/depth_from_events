@@ -13,9 +13,9 @@ _args_:
           - _target_: rerun.blueprint.Spatial2DView
             name: disparity
             origin: /${stage}/disparity
-          - _target_: rerun.blueprint.Spatial2DView
-            name: disparity_pred
-            origin: /${stage}/disparity_pred
+          # - _target_: rerun.blueprint.Spatial2DView
+          #   name: disparity_pred
+          #   origin: /${stage}/disparity_pred
       - _target_: rerun.blueprint.Horizontal
         contents:
           - _target_: rerun.blueprint.Spatial2DView
@@ -38,6 +38,6 @@ _args_:
           - _target_: rerun.blueprint.Spatial2DView
             name: disparity_gt
             origin: /${stage}/disparity_gt
-          - _target_: rerun.blueprint.Spatial2DView
-            name: color_gt
-            origin: /${stage}/color_gt
+          # - _target_: rerun.blueprint.Spatial2DView
+          #   name: color_gt
+          #   origin: /${stage}/color_gt
