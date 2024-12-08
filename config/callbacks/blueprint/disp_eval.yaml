@@ -1,0 +1,51 @@
+_target_: rerun.blueprint.Blueprint
+_args_:
+  - _target_: rerun.blueprint.Vertical
+    contents:
+      - _target_: rerun.blueprint.Horizontal
+        contents:
+          - _target_: rerun.blueprint.Spatial2DView
+            name: events
+            origin: /${stage}/events
+          - _target_: rerun.blueprint.Spatial2DView
+            name: flow
+            origin: /${stage}/flow
+          - _target_: rerun.blueprint.Spatial2DView
+            name: disparity_gt
+            origin: /disparity_gt
+      - _target_: rerun.blueprint.Horizontal
+        contents:
+          - _target_: rerun.blueprint.Spatial2DView
+            name: masked_disparity
+            origin: /depth_disparity_eval_median_eventFalse_cutoffNone
+          - _target_: rerun.blueprint.Spatial2DView
+            name: masked_gt_disparity
+            origin: /gt_depth_disparity_eval_median_eventFalse_cutoffNone
+          - _target_: rerun.blueprint.Vertical
+            contents:
+              - _target_: rerun.blueprint.BarChartView
+                name: distribution
+                origin: /hist_median_eventFalse_cutoffNone
+              - _target_: rerun.blueprint.BarChartView
+                name: distribution
+                origin: /hist_median_eventFalse_cutoffNone_gt
+      - _target_: rerun.blueprint.Horizontal
+        contents:
+          - _target_: rerun.blueprint.Spatial2DView
+            name: masked_disparity
+            origin: /depth_disparity_eval_median_eventTrue_cutoffNone
+          - _target_: rerun.blueprint.Spatial2DView
+            name: masked_gt_disparity
+            origin: /gt_depth_disparity_eval_median_eventTrue_cutoffNone
+          - _target_: rerun.blueprint.Vertical
+            contents:
+              - _target_: rerun.blueprint.BarChartView
+                name: distribution
+                origin: /hist_median_eventTrue_cutoffNone
+              - _target_: rerun.blueprint.BarChartView
+                name: distribution
+                origin: /hist_median_eventTrue_cutoffNone_gt
+      - _target_: rerun.blueprint.TimeSeriesView
+        name: metrics
+        origin: /
+
