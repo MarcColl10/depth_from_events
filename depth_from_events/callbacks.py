@@ -73,8 +73,12 @@ class ImageLogger(Callback):
             self.visualizer.set_counter()
 
             # things with events
-            for k in [k for k in output.keys() if "events" in k]:
+            for k in [k for k in output.keys() if "events" in k and "raw" not in k]:
                 self.visualizer.event_frame(output[k][0].detach().cpu(), name=k)
+
+            # save events as text file
+            for k in [k for k in output.keys() if "events_raw" in k]:
+                self.visualizer.csv(output[k][0].detach().cpu(), name=k)
 
             # save as raw numpy array
             for k in [k for k in output.keys() if "raw" in k]:
@@ -86,7 +90,11 @@ class ImageLogger(Callback):
 
             # things with disparity
             for k in [k for k in output.keys() if "disparity" in k and "raw" not in k]:
-                self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
+                if isinstance(output[k], tuple):
+                    self.visualizer.disparity_map(output[k][1][0].detach().cpu(), name=k)
+                    self.visualizer.disparity_map(output[k][0][0].detach().cpu(), name=f"gt_{k}")
+                else:
+                    self.visualizer.disparity_map(output[k][0].detach().cpu(), name=k)
 
             # color images
             for k in [k for k in output.keys() if "color" in k]:

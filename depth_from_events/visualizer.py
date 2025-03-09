@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 
 import numpy as np
+import pandas as pd
 from PIL import Image
 import rerun as rr
 import rerun.blueprint as rrb
@@ -127,6 +128,11 @@ class ImageVisualizer:
         image = event_frame_to_image(frame)
         self.save_image(name, image)
 
+    def csv(self, events, name="events_raw"):
+        if (self.root_dir / name).exists():
+            df = pd.DataFrame(events.numpy())
+            df.to_csv(self.root_dir / name / f"{self.counter:05d}.csv", index=False, header=["t", "y", "x", "p"])
+
     def nparray(self, frame, name="raw"):
         self.save_nparray(frame, name)
 
@@ -143,5 +149,6 @@ class ImageVisualizer:
         self.save_image(name, image)
 
     def scalar(self, name, scalar):
-        with open(self.root_dir / name / "data.txt", "a") as f:
-            f.write(f"{self.counter:05d},{scalar}\n")
+        if (self.root_dir / name).exists():
+            with open(self.root_dir / name / "data.txt", "a") as f:
+                f.write(f"{self.counter:05d},{scalar}\n")

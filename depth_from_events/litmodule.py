@@ -128,6 +128,7 @@ class Train(LightningModule):
             # add to log if visualizing
             if self.visualizing:
                 log[f"{stage}/events"] = frame
+                log[f"{stage}/events_raw"] = aux["events"][:, : aux["counts"].max()]
                 log[f"{stage}/flow"] = flow
                 log[f"{stage}/flow_raw"] = flow
                 if self.transform is not None:
