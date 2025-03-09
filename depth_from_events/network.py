@@ -6,7 +6,7 @@ from depth_from_events.network_utils import NetworkWrapper
 
 class FlowNetwork(nn.Module):
     """
-    Optical flow prediction network following ID-Net.
+    Optical flow prediction network following IDNet (Wu et al., ICRA'24).
     """
 
     def __init__(
