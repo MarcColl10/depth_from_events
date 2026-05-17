@@ -170,14 +170,27 @@ class PosePlotter(Callback):
         if obj is None:
             return default
 
+        if isinstance(obj, dict):
+            return obj[key] if key in obj else default
+
+        if hasattr(obj, "get"):
+            try:
+                value = obj.get(key, default)
+                return value if value is not None else default
+            except Exception:
+                pass
+
         try:
-            if key in obj:
-                return obj[key]
-        except TypeError:
-            pass
+            value = getattr(obj, key)
+        except Exception:
+            return default
 
-        return getattr(obj, key, default)
+        # DotMap can return another empty DotMap for missing keys.
+        # Do not treat that as real data.
+        if value.__class__.__name__ == "DotMap" and len(value) == 0:
+            return default
 
+        return value
     def _index_time(self, value, i):
         if value is None:
             return None
@@ -194,12 +207,23 @@ class PosePlotter(Callback):
         if value is None:
             return None
 
-        if hasattr(value, "detach"):
-            value = value.detach().cpu().float().numpy()
-        else:
-            value = np.asarray(value, dtype=np.float32)
+        # Real PyTorch tensor
+        if torch.is_tensor(value):
+            return value.detach().cpu().float().numpy()
 
-        return value
+        # NumPy array
+        if isinstance(value, np.ndarray):
+            return value.astype(np.float32)
+
+        # Plain Python numeric/list/tuple values
+        if isinstance(value, (int, float, list, tuple)):
+            try:
+                return np.asarray(value, dtype=np.float32)
+            except Exception:
+                return None
+
+        # Anything else, e.g. empty DotMap from missing GT pose
+        return None
 
     def _to_pose6(self, value, pad_translation_with_nan=True):
         value = self._to_numpy(value)
