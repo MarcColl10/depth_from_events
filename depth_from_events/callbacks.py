@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
