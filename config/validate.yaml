@@ -11,5 +11,7 @@ name: ${stage}_${runid}_${checkpoint}
 runid: ???
 checkpoint: latest
 local_state_dict: null
-
+plot_pose: false
+pose_plot_dir: pose_plots
+pose_plot_max_batches: null
 deletes: []

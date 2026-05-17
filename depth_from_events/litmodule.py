@@ -18,32 +18,30 @@ class Train(LightningModule):
         self.automatic_optimization = False  # manual because tbptt
 
     def setup(self, stage):
-        # trace lazy modules if training (always for litmodule Train?)
+        # trace lazy modules if training
         if stage == "fit":
             x = torch.zeros(self.trainer.datamodule.train_frame_shape, device=self.device)
             self.network.trace(x)
 
-        # print parameter count per module
-        # for name, module in self.network.named_modules():
-        #     n_params = sum(p.numel() for p in module.parameters())
-        #     print(f"{name}: {n_params}")
-
-        # NOTE: not helping!
-        # # compile network
-        # self.network = torch.compile(self.network, fullgraph=True, mode="reduce-overhead")
-
-        # # compile transform
-        # b, _, h, w = self.trainer.datamodule.train_frame_shape
-        # self.transform.init_grid(b, h, w, self.device, torch.float32)
-        # self.transform = torch.compile(self.transform, fullgraph=True, mode="reduce-overhead")
-
         # wandb model watching
         if self.logger is not None:
-            self.logger.watch(self.network, log="all", log_freq=self.trainer.log_every_n_steps * 100)
+            self.logger.watch(
+                self.network,
+                log="all",
+                log_freq=self.trainer.log_every_n_steps * 100,
+            )
 
         # set visualization
         self.visualizing = any(
-            [isinstance(cb, (callbacks.LiveVisualizer, callbacks.ImageLogger)) for cb in self.trainer.callbacks]
+            isinstance(
+                cb,
+                (
+                    callbacks.LiveVisualizer,
+                    callbacks.ImageLogger,
+                    callbacks.PosePlotter,
+                ),
+            )
+            for cb in self.trainer.callbacks
         )
 
     def shared_step(self, batch, batch_idx, stage):
@@ -63,15 +61,17 @@ class Train(LightningModule):
 
         # if has gt pose
         if "pose" in batch:
-            pose_gt = batch.pose
+            pose_gt = batch["pose"]
         else:
             pose_gt = None
 
         # go over sequence
         log_seq = OrderedDict()
+
         for i, (frame, eof) in enumerate(zip(frames, eofs)):
             log_seq[i] = dict()
             log = log_seq[i]
+
             # get auxiliary: events and counts
             aux = {k: v[i] for k, v in auxs.items()}
 
@@ -80,50 +80,56 @@ class Train(LightningModule):
             yhat = self.network(frame)
 
             # transform network output
-            if self.transform is not None:
+            if isinstance(yhat, (tuple, list)):
                 if len(yhat) == 2:
                     depth, pose = yhat
                 elif len(yhat) == 3:
                     depth, pose, _ = yhat
+                else:
+                    raise ValueError(f"Unexpected network output length: {len(yhat)}")
 
-                # override pose estimation if desired
-                # if self.override_pose and pose_gt is not None:
-                #     pose = pose_gt[i]
-                #     yhat_list = list(yhat)
-                #     yhat_list[1] = pose
-                #     yhat = tuple(yhat_list)
+                # Save raw network-predicted pose before any GT override.
+                pose_pred = pose
+
+                # Override predicted rotation with GT rotation if available.
+                # This keeps the original training/validation behavior,
+                # while pose_pred still stores the real network prediction for plotting.
                 if "gt_rotation" in aux:
                     _, translation = pose.split([3, 3], dim=-1)
-                    # rmat = self.transform.rodrigues(angle)
-                    # angle = R.from_matrix(rmat.cpu().numpy()).as_euler("xyz", degrees=True)
-                    # angle = R.from_rotvec(axisangle.cpu().numpy()).as_euler("xyz", degrees=True)
-                    # gt_angle = R.from_rotvec(aux.gt_rotation.cpu().numpy()).as_euler("xyz", degrees=True)
-                    # gt_angle = aux.gt_rotation
-                    # gt_rmat = self.transform.rodrigues(gt_angle)
-                    # gt_angle = R.from_matrix(gt_rmat.cpu().numpy()).as_euler("xyz", degrees=True)
-                    pose = torch.cat([aux.gt_rotation, translation], dim=-1)
-                    yhat = tuple([yhat[0], pose])
-                    # log["/rotation_x"] = angle[:, 0].item()
-                    # log["/rotation_y"] = angle[:, 1].item()
-                    # log["/rotation_z"] = angle[:, 2].item()
-                    # log["/rotation_gt_x"] = gt_angle[:, 0].item()
-                    # log["/rotation_gt_y"] = gt_angle[:, 1].item()
-                    # log["/rotation_gt_z"] = gt_angle[:, 2].item()
+                    pose = torch.cat([aux["gt_rotation"], translation], dim=-1)
+
+                    if len(yhat) == 2:
+                        yhat = (yhat[0], pose)
+                    elif len(yhat) == 3:
+                        yhat = (yhat[0], pose, yhat[2])
 
                 flow = self.transform(yhat, batch["K_rect"], batch["inv_K_rect"])
+
                 if self.network.mode == "depth":
-                    # depth = self.transform.clip_depth(depth)
-                    disparity = self.transform.depth_to_disparity(depth)  # TODO: also scaling?
+                    disparity = self.transform.depth_to_disparity(depth)
                 elif self.network.mode == "disparity":
                     disparity, depth = self.transform.disparity_to_depth(depth)
-                self.log(f"{stage}/depth_std", depth.std(), batch_size=1, prog_bar=True)
+                else:
+                    raise ValueError(f"Unknown network mode: {self.network.mode}")
+
+                self.log(
+                    f"{stage}/depth_std",
+                    depth.std(),
+                    batch_size=1,
+                    prog_bar=True,
+                )
+
             else:
-                depth, disparity, pose = None, None, None
+                depth, disparity, pose, pose_pred = None, None, None, None
                 flow = yhat
 
             # log model prediction and avg event count
-            self.log(f"{stage}/flow_abs_mean", flow.abs().mean(), batch_size=1, prog_bar=True)
-            # self.log(f"{stage}/event_count", aux.counts.float().mean(), batch_size=1, prog_bar=True)
+            self.log(
+                f"{stage}/flow_abs_mean",
+                flow.abs().mean(),
+                batch_size=1,
+                prog_bar=True,
+            )
 
             # add to log if visualizing
             if self.visualizing:
@@ -131,43 +137,63 @@ class Train(LightningModule):
                 log[f"{stage}/events_raw"] = aux["events"][:, : aux["counts"].max()]
                 log[f"{stage}/flow"] = flow
                 log[f"{stage}/flow_raw"] = flow
+
                 if self.transform is not None:
                     log[f"{stage}/disparity"] = disparity
                     log[f"{stage}/disparity_raw"] = disparity
                     log[f"{stage}/pose"] = pose
+                    log[f"{stage}/pose_pred"] = pose_pred
+
                 if pose_gt is not None:
                     log[f"{stage}/pose_gt"] = pose_gt[i]
+
                 if targets is not None:
                     if targets[i].get("gt_depth") is not None:
-                        log[f"{stage}/disparity_gt"] = self.transform.depth_to_disparity(targets[i].gt_depth)
+                        log[f"{stage}/disparity_gt"] = self.transform.depth_to_disparity(
+                            targets[i].gt_depth
+                        )
+
                     elif targets[i].get("gt_disparity") is not None:
                         log[f"{stage}/disparity_gt"] = targets[i].gt_disparity
+
                     if targets[i].get("gt_color") is not None:
                         log[f"{stage}/color_gt"] = targets[i].gt_color
+
                     if targets[i].get("depth_pred") is not None:
-                        log[f"{stage}/disparity_pred"] = self.transform.depth_to_disparity(targets[i].depth_pred)
+                        log[f"{stage}/disparity_pred"] = self.transform.depth_to_disparity(
+                            targets[i].depth_pred
+                        )
+
                     if targets[i].get("yaw_rate") is not None:
                         log[f"{stage}/yaw_rate"] = targets[i].yaw_rate.item()
+
                     if targets[i].get("yaw_rate_pred") is not None:
                         log[f"{stage}/yaw_rate_pred"] = targets[i].yaw_rate_pred.item()
+
                     if targets[i].get("status") is not None:
                         log[f"{stage}/status"] = targets[i].status.item()
 
             # go over loss functions
             loss = 0
+
             for name, loss_fn in self.loss_functions[stage].items():
                 # forward
                 if name in ["cmax", "rsat"]:
                     loss_fn(frame, aux, flow)
+
                 elif name in ["ea_smooth"]:
                     loss_fn(frame, disparity)
+
                 elif name in ["scale_consistency"]:
-                    loss_fn(disparity, pose, batch.K_rect)
+                    loss_fn(disparity, pose, batch["K_rect"])
+
                 elif targets and name in ["depth_disparity"]:
                     if targets[i].get("gt_depth") is not None:
                         loss_fn(frame, depth, targets[i].gt_depth)
+
                     elif targets[i].get("gt_disparity") is not None:
                         loss_fn(frame, disparity, targets[i].gt_disparity)
+
                     elif targets[i].get("eval_disparity_id") is not None:
                         loss_fn(frame, disparity, targets[i].eval_disparity_id)
 
@@ -175,9 +201,15 @@ class Train(LightningModule):
                 if self.visualizing:
                     if name in ["cmax", "rsat"]:
                         with torch.no_grad():
-                            log[f"{stage}/{name}_accumulated_events"] = loss_fn.get_accumulated_events()
-                            log[f"{stage}/{name}_image_warped_events_0"] = loss_fn.compute_iwe(0)
-                            log[f"{stage}/{name}_image_warped_events_t"] = loss_fn.compute_iwe(loss_fn.passes)
+                            log[f"{stage}/{name}_accumulated_events"] = (
+                                loss_fn.get_accumulated_events()
+                            )
+                            log[f"{stage}/{name}_image_warped_events_0"] = (
+                                loss_fn.compute_iwe(0)
+                            )
+                            log[f"{stage}/{name}_image_warped_events_t"] = (
+                                loss_fn.compute_iwe(loss_fn.passes)
+                            )
 
                 # backward if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
@@ -188,10 +220,15 @@ class Train(LightningModule):
             if stage == "train" and loss:
                 optimizer.zero_grad()
                 self.manual_backward(loss)
-                self.clip_gradients(optimizer, gradient_clip_val=self.gradient_clip_val)
+                self.clip_gradients(
+                    optimizer,
+                    gradient_clip_val=self.gradient_clip_val,
+                )
                 optimizer.step()
-                self.log("train/lr", scheduler.get_last_lr()[0]) if scheduler is not None else None
-                scheduler.step() if scheduler is not None else None
+
+                if scheduler is not None:
+                    self.log("train/lr", scheduler.get_last_lr()[0])
+                    scheduler.step()
 
                 # detach network state
                 self.network.detach()
@@ -202,30 +239,66 @@ class Train(LightningModule):
                 if loss_fn.passes == loss_fn.accumulation_window:
                     # reset loss and log
                     # loss per tbptt window per batch sample
-                    # default batch size (seq_len) gives same value but rounding errors
+                    # default batch size seq_len gives same value but rounding errors
                     for name, value in loss_fn.compute_and_reset().items():
                         if stage == "train" and value:
-                            self.log(f"{stage}/{name}", value, batch_size=1, on_epoch=True, prog_bar=True)
+                            self.log(
+                                f"{stage}/{name}",
+                                value,
+                                batch_size=1,
+                                on_epoch=True,
+                                prog_bar=True,
+                            )
+
                         elif stage == "validate" and value:
-                            if name.startswith("depth_disparity") and isinstance(value, tuple):
+                            if name.startswith("depth_disparity") and isinstance(
+                                value,
+                                tuple,
+                            ):
                                 log[name] = value
+
                             if name.startswith("mae"):
                                 log[name] = value
+
                             if name.startswith("hist"):
                                 log[name] = value
-                            if isinstance(value, (torch.Tensor, float, int)):  # if loggable
-                                self.log(f"{stage}/{name}/{rec}", value, batch_size=1)  # on_epoch true by default
-                                self.log(f"{stage}/{name}/mean", value, batch_size=1)
+
+                            if isinstance(value, (torch.Tensor, float, int)):
+                                self.log(
+                                    f"{stage}/{name}/{rec}",
+                                    value,
+                                    batch_size=1,
+                                )
+                                self.log(
+                                    f"{stage}/{name}/mean",
+                                    value,
+                                    batch_size=1,
+                                )
+
                         elif stage == "test" and value:
-                            if name.startswith("depth_disparity") and isinstance(value, tuple):
+                            if name.startswith("depth_disparity") and isinstance(
+                                value,
+                                tuple,
+                            ):
                                 log[name] = value
+
                             else:
-                                self.log(f"{stage}/{name}/{rec}", value, batch_size=1)
-                                self.log(f"{stage}/{name}/mean", value, batch_size=1, prog_bar=True)
+                                self.log(
+                                    f"{stage}/{name}/{rec}",
+                                    value,
+                                    batch_size=1,
+                                )
+                                self.log(
+                                    f"{stage}/{name}/mean",
+                                    value,
+                                    batch_size=1,
+                                    prog_bar=True,
+                                )
 
             # reset if end of sequence
             if any(eof):
                 self.network.reset()
+
                 for loss_fn in self.loss_functions[stage].values():
                     loss_fn.reset()
 
@@ -248,11 +321,14 @@ class Train(LightningModule):
         # scheduler: compute steps per epoch
         if self.scheduler is None:
             return optimizer
-        else:
-            dl_len = len(self.trainer.datamodule.train_dataloader())  # don't think this affects dl
-            steps_per_seq = (
-                self.trainer.datamodule.train_seq_len / self.loss_functions["train"]["cmax"].accumulation_window
-            )
-            steps_per_epoch = int(dl_len * steps_per_seq)
-            scheduler = self.scheduler(optimizer, steps_per_epoch=steps_per_epoch)
-            return [optimizer], [scheduler]
+
+        dl_len = len(self.trainer.datamodule.train_dataloader())
+        steps_per_seq = (
+            self.trainer.datamodule.train_seq_len
+            / self.loss_functions["train"]["cmax"].accumulation_window
+        )
+        steps_per_epoch = int(dl_len * steps_per_seq)
+
+        scheduler = self.scheduler(optimizer, steps_per_epoch=steps_per_epoch)
+
+        return [optimizer], [scheduler]

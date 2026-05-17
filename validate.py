@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
+from depth_from_events.callbacks import PosePlotter
 
 import hydra
 from hydra.utils import instantiate
@@ -58,7 +59,14 @@ def main(overrides):
 
     # callbacks
     callbacks = instantiate(config.callbacks)
+
     callbacks.pop("checkpoint", None)
+
+    if overrides.get("plot_pose", False):
+        callbacks["pose_plotter"] = PosePlotter(
+            output_dir=overrides.get("pose_plot_dir", "pose_plots"),
+            max_batches=overrides.get("pose_plot_max_batches", None),
+            stage="validate",)
 
     # trainer and validate!
     trainer = instantiate(config.trainer, logger=False, callbacks=[cb for cb in callbacks.values()])
