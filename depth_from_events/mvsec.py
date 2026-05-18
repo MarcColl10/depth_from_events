@@ -155,6 +155,33 @@ class MvsecSequence:
 
     def __len__(self):
         return len(self.chunk_map)
+    
+
+    def get_gt_relative_pose(self, t_start, t_end):
+        pose_ts = self.fs["gt"]["davis/left/pose_ts"]
+        poses = self.fs["gt"]["davis/left/pose"]
+
+        start_id = bisect_left(pose_ts, t_start)
+        end_id = bisect_left(pose_ts, t_end)
+
+        start_id = min(start_id, len(pose_ts) - 1)
+        end_id = min(end_id, len(pose_ts) - 1)
+
+        T0 = poses[start_id]
+        T1 = poses[end_id]
+
+        T_rel = np.linalg.inv(T0) @ T1
+
+        R_rel = T_rel[:3, :3]
+        t_rel = T_rel[:3, 3]
+
+        rotvec, _ = cv2.Rodrigues(R_rel)
+        rotvec = rotvec.reshape(3)
+
+        pose = np.concatenate([rotvec, t_rel], axis=0).astype(np.float32)
+
+        return pose
+
 
     def __getitem__(self, idx):
         # get new random slice, crop, augmentations
@@ -164,7 +191,7 @@ class MvsecSequence:
         chunk = self.chunk_map[idx]
 
         # go over slices
-        events, frames, counts, targets = [], [], [], []
+        events, frames, counts, targets, poses = [], [], [], [], []
         for i in chunk:
             # convert to indices
             start = bisect_left(self.fs["data"]["davis/left/events"], self.t_start[i], key=lambda x: x[2])
@@ -251,6 +278,7 @@ class MvsecSequence:
             frames.append(frame)
             counts.append(len(lst))
             targets.append(dict(gt_depth=gt_depth, gt_depth_id=gt_depth_id))
+            poses.append(self.get_gt_relative_pose(self.t_start[i], self.t_end[i]))
 
         # stack and pad
         max_len = max(counts)
@@ -290,6 +318,8 @@ class MvsecSequence:
         events = rfn.structured_to_unstructured(events, dtype=np.float32)
         events = torch.from_numpy(events)
         counts = torch.from_numpy(counts)
+        poses = torch.from_numpy(np.stack(poses).astype(np.float32))
+
         auxs = dict(events=events, counts=counts)
         targets = [
             {k: torch.from_numpy(v.astype(np.float32)) if isinstance(v, np.ndarray) else v for k, v in t.items()}
@@ -301,6 +331,7 @@ class MvsecSequence:
         # return dict
         sample = dict(
             frames=frames.float(),
+            poses=poses,
             auxs=auxs,
             targets=targets if self.gt else None,
             recording=self.recording,
