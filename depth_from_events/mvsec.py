@@ -331,7 +331,7 @@ class MvsecSequence:
         # return dict
         sample = dict(
             frames=frames.float(),
-            poses=poses,
+            pose=poses,
             auxs=auxs,
             targets=targets if self.gt else None,
             recording=self.recording,

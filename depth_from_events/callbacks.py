@@ -292,7 +292,15 @@ class PosePlotter(Callback):
 
             self.pred_poses.append(pred)
 
-            gt = self._extract_gt_pose(batch, i)
+            # Prefer GT pose already logged by litmodule.py
+            gt = output.get(f"{self.stage}/pose_gt", None)
+
+            # Fallback: try to extract it directly from the batch
+            if gt is None:
+                gt = self._extract_gt_pose(batch, i)
+
+            gt = self._to_pose6(gt, pad_translation_with_nan=True)
+
             if gt is not None:
                 self.gt_poses.append(gt)
 
