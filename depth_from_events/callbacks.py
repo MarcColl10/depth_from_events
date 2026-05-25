@@ -355,23 +355,43 @@ class PosePlotter(Callback):
     def _save_component_plot(self, pred, gt):
         labels = ["rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"]
 
+        pred_color = "#005AB5"  # strong blue
+        gt_color = "#DC3220"    # strong red/orange
+
         fig, axes = plt.subplots(2, 3, figsize=(14, 7), sharex=True)
         axes = axes.ravel()
 
         for j, ax in enumerate(axes):
-            ax.plot(pred[:, j], label="pred")
-
+            # Plot GT first, slightly transparent, so prediction remains visible on top.
             if gt is not None and not np.isnan(gt[:, j]).all():
-                ax.plot(gt[:, j], "--", label="gt")
+                ax.plot(
+                    gt[:, j],
+                    color=gt_color,
+                    linestyle="--",
+                    linewidth=1.0,
+                    alpha=0.65,
+                    label="gt",
+                    zorder=1,
+                )
+
+            ax.plot(
+                pred[:, j],
+                color=pred_color,
+                linestyle="-",
+                linewidth=1.8,
+                alpha=0.95,
+                label="pred",
+                zorder=2,
+            )
 
             ax.set_title(labels[j])
-            ax.grid(True)
+            ax.grid(True, alpha=0.35)
 
         axes[0].legend()
         fig.suptitle("Predicted pose vs ground-truth pose")
         fig.tight_layout()
 
-        fig.savefig(self.output_dir / "pose_components.png", dpi=200)
+        fig.savefig(self.output_dir / "pose_components.png", dpi=250)
         plt.close(fig)
 
     def _save_trajectory_plot(self, pred, gt):
