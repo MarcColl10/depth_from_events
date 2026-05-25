@@ -1,0 +1,6 @@
+forward_backward_pose:
+  _target_: depth_from_events.forward_backward_pose.ForwardBackwardPoseConsistency
+  accumulation_window: 10
+  weight: 0.001
+  rotation_weight: 1.0
+  translation_weight: 0.1

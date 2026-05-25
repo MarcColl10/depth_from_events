@@ -6,6 +6,7 @@ defaults:
   - loss_functions@loss_functions.train:
     - cmax_iter
     - scale_consistency
+    - forward_backward_pose
   - loss_functions@loss_functions.validate:
     - cmax_iter
     - rsat

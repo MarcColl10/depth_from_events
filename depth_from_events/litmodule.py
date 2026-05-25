@@ -186,6 +186,9 @@ class Train(LightningModule):
 
                 elif name in ["scale_consistency"]:
                     loss_fn(disparity, pose, batch["K_rect"])
+                
+                elif name in ["forward_backward_pose"]:
+                    loss_fn(frame, pose_pred)
 
                 elif targets and name in ["depth_disparity"]:
                     if targets[i].get("gt_depth") is not None:
@@ -213,8 +216,13 @@ class Train(LightningModule):
 
                 # backward if enough passes
                 if loss_fn.passes == loss_fn.accumulation_window:
-                    dloss = loss_fn.backward()
+                    if name in ["forward_backward_pose"]:
+                        dloss = loss_fn.backward(self.network)
+                    else:
+                        dloss = loss_fn.backward()
+
                     loss += dloss if dloss is not None else 0
+                
 
             # training: backprop and optimize
             if stage == "train" and loss:
