@@ -6,3 +6,4 @@ runs/
 figures/
 __pycache__/
 .vscode/
+data
