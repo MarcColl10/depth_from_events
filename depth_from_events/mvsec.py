@@ -330,14 +330,17 @@ class MvsecSequence:
 
         # return dict
         sample = dict(
-            frames=frames.float(),
+            frames=frames.float(),  #Left event frames
+	    frames_right=frames_right.float(),      # right event frames
             pose=poses,
             auxs=auxs,
             targets=targets if self.gt else None,
             recording=self.recording,
             eofs=[i == len(self.t_start) - 1 for i in chunk],
-            K_rect=K_rect,
+            K_rect=K_rect,    ## left rectified intrinsics
             inv_K_rect=inv_K_rect,
+	    K_rect_right=K_rect_right,              # right rectified intrinsics
+    	    T_left_to_right=T_left_to_right,        # stereo extrinsic
         )
 
         return sample

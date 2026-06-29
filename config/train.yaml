@@ -7,6 +7,7 @@ defaults:
     - cmax_iter
     - scale_consistency
     - forward_backward_pose
+    - stereo_event_consistency
   - loss_functions@loss_functions.validate:
     - cmax_iter
     - rsat

@@ -1,0 +1,15 @@
+stereo_event_consistency:
+  _target_: depth_from_events.stereo_consistency.StereoEventConsistency
+  accumulation_window: 10
+  weight: 0.01
+  patch_size: 5
+  min_valid_ratio: 0.002
+  use_census: true
+
+  # Optional fixed calibration. Prefer putting this in the batch if it changes
+  # between datasets/sequences.
+  # T_left_to_right:
+  #   - [1.0, 0.0, 0.0, -0.10]
+  #   - [0.0, 1.0, 0.0,  0.00]
+  #   - [0.0, 0.0, 1.0,  0.00]
+  #   - [0.0, 0.0, 0.0,  1.00]

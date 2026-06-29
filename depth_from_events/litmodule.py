@@ -59,6 +59,8 @@ class Train(LightningModule):
             batch["recording"],
         )
 
+	frames_right = batch.get("frames_right", None)
+
         # if has gt pose
         if "pose" in batch:
             pose_gt = batch["pose"]
@@ -74,6 +76,10 @@ class Train(LightningModule):
 
             # get auxiliary: events and counts
             aux = {k: v[i] for k, v in auxs.items()}
+
+	    frame_right = None
+	    if frames_right is not None:
+    	    	frame_right = frames_right[i]
 
             # forward network
             # if flow net, this is flow; else (depth/disparity, pose)
@@ -186,7 +192,25 @@ class Train(LightningModule):
 
                 elif name in ["scale_consistency"]:
                     loss_fn(disparity, pose, batch["K_rect"])
-                
+ 
+               elif name in ["stereo_event_consistency"]:
+		    if frame_right is None:
+        		raise KeyError("stereo_event_consistency needs batch['frames_right']." "Modify the datamodule to return synchronized right-camera event frames.")
+
+    		    K_left = batch["K_rect"]
+    		    K_right = batch.get("K_rect_right", K_left)
+
+    		    T_left_to_right = batch.get("T_left_to_right", None)
+
+    		    loss_fn(
+        	    	frame,
+        		frame_right,
+        		depth,
+        		K_left,
+        		K_right,
+        		T_left_to_right,
+    		    )
+
                 elif name in ["forward_backward_pose"]:
                     loss_fn(frame, pose_pred)
 

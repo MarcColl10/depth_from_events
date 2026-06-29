@@ -1,0 +1,19 @@
+
+# Local installers
+Miniconda3-*.sh
+
+# Vim/nano temporary files
+*.swp
+*.swo
+
+# Local backups
+*.bak
+*.bak_*
+*.backup
+
+# Local debug plots / generated outputs
+pose_plots/
+pose_plots_*/
+
+# Numpy debug dumps
+*.npy
