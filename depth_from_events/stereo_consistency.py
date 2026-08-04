@@ -301,12 +301,43 @@ class StereoEventConsistency(nn.Module):
 
     @staticmethod
     def _batch_matrix(matrix, batch_size, device, dtype):
-        if not torch.is_tensor(matrix):
-            matrix = torch.tensor(matrix, device=device, dtype=dtype)
-        else:
+        """
+        Convert calibration/extrinsic input to B x N x M tensor.
+
+        Handles:
+          - plain numpy arrays / lists
+          - torch tensors
+          - dataloader-collated lists or tuples of tensors
+          - singleton batch dimensions
+        """
+        if isinstance(matrix, (list, tuple)):
+            if len(matrix) == 1:
+                matrix = matrix[0]
+            elif all(torch.is_tensor(m) for m in matrix):
+                matrix = torch.stack([m.to(device=device, dtype=dtype) for m in matrix], dim=0)
+            else:
+                matrix = torch.as_tensor(matrix, device=device, dtype=dtype)
+
+        if torch.is_tensor(matrix):
             matrix = matrix.to(device=device, dtype=dtype)
+        else:
+            matrix = torch.as_tensor(matrix, device=device, dtype=dtype)
+
+        # Remove accidental leading singleton dimensions, e.g. 1 x B x 3 x 3.
+        while matrix.ndim > 3 and matrix.shape[0] == 1:
+            matrix = matrix.squeeze(0)
 
         if matrix.ndim == 2:
             matrix = matrix.unsqueeze(0).expand(batch_size, -1, -1)
+        elif matrix.ndim == 3:
+            if matrix.shape[0] == 1 and batch_size > 1:
+                matrix = matrix.expand(batch_size, -1, -1)
+            elif matrix.shape[0] != batch_size:
+                raise ValueError(
+                    f"Expected matrix batch dimension {batch_size}, "
+                    f"got shape {tuple(matrix.shape)}"
+                )
+        else:
+            raise ValueError(f"Expected 2D or 3D matrix, got shape {tuple(matrix.shape)}")
 
         return matrix

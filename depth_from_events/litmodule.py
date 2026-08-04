@@ -59,7 +59,20 @@ class Train(LightningModule):
             batch["recording"],
         )
 
-	frames_right = batch.get("frames_right", None)
+        frames_right = batch.get("frames_right", None)
+
+        # Match frames_right layout to frames layout.
+        # Existing code iterates frames as sequence-first: frames[i].
+        # Depending on collation, the new frames_right key may arrive as batch-first.
+        if frames_right is not None:
+            if isinstance(frames_right, (list, tuple)) and len(frames_right) == 1:
+                frames_right = frames_right[0]
+
+            if hasattr(frames_right, "shape") and hasattr(frames, "__len__"):
+                seq_len = len(frames)
+                if len(frames_right) != seq_len and getattr(frames_right, "ndim", 0) >= 2:
+                    if frames_right.shape[1] == seq_len:
+                        frames_right = frames_right.transpose(0, 1)
 
         # if has gt pose
         if "pose" in batch:
@@ -77,9 +90,9 @@ class Train(LightningModule):
             # get auxiliary: events and counts
             aux = {k: v[i] for k, v in auxs.items()}
 
-	    frame_right = None
-	    if frames_right is not None:
-    	    	frame_right = frames_right[i]
+            frame_right = None
+            if frames_right is not None:
+                frame_right = frames_right[i]
 
             # forward network
             # if flow net, this is flow; else (depth/disparity, pose)
@@ -193,23 +206,25 @@ class Train(LightningModule):
                 elif name in ["scale_consistency"]:
                     loss_fn(disparity, pose, batch["K_rect"])
  
-               elif name in ["stereo_event_consistency"]:
-		    if frame_right is None:
-        		raise KeyError("stereo_event_consistency needs batch['frames_right']." "Modify the datamodule to return synchronized right-camera event frames.")
+                elif name in ["stereo_event_consistency"]:
+                    if frame_right is None:
+                        raise KeyError(
+                            "stereo_event_consistency needs batch['frames_right']. "
+                            "Check mvsec.py and make sure frames_right is returned."
+                        )
 
-    		    K_left = batch["K_rect"]
-    		    K_right = batch.get("K_rect_right", K_left)
+                    K_left = batch["K_rect"]
+                    K_right = batch.get("K_rect_right", K_left)
+                    T_left_to_right = batch.get("T_left_to_right", None)
 
-    		    T_left_to_right = batch.get("T_left_to_right", None)
-
-    		    loss_fn(
-        	    	frame,
-        		frame_right,
-        		depth,
-        		K_left,
-        		K_right,
-        		T_left_to_right,
-    		    )
+                    loss_fn(
+                        frame,
+                        frame_right,
+                        depth,
+                        K_left,
+                        K_right,
+                        T_left_to_right,
+                    )
 
                 elif name in ["forward_backward_pose"]:
                     loss_fn(frame, pose_pred)

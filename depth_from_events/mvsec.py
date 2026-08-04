@@ -49,6 +49,8 @@ class MvsecSequence:
             "gt": self.root_dir / recording / f"{self.recording}_gt.hdf5",
             "rect_map_x": self.root_dir / recording / "calib" / f"{recording}_left_x_map.txt",
             "rect_map_y": self.root_dir / recording / "calib" / f"{recording}_left_y_map.txt",
+            "rect_map_x_right": self.root_dir / recording / "calib" / f"{recording}_right_x_map.txt",
+            "rect_map_y_right": self.root_dir / recording / "calib" / f"{recording}_right_y_map.txt",
             "calibration": self.root_dir / recording / "calib" / f"camchain-imucam-{recording}.yaml",
         }
         assert all(p.exists() for p in paths.values())
@@ -69,6 +71,10 @@ class MvsecSequence:
         rect_map_y = np.loadtxt(paths["rect_map_y"])
         self.fw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)  # x_rect, y_rect = rect_map[y, x].T
 
+        rect_map_x_right = np.loadtxt(paths["rect_map_x_right"])
+        rect_map_y_right = np.loadtxt(paths["rect_map_y_right"])
+        self.fw_rect_map_right = np.stack([rect_map_x_right, rect_map_y_right], axis=-1)
+
         # backward rectification/undistortion map
         # rectified/undistorted -> distorted coords
         # more work, but prevents lines in accumulated event frames
@@ -85,9 +91,25 @@ class MvsecSequence:
         )
         self.bw_rect_map = np.stack([rect_map_x, rect_map_y], axis=-1)  # needs to be .fisheye!
 
+        # right-camera rectification/undistortion map
+        fx, fy, cx, cy = cam_to_cam["cam1"]["intrinsics"]
+        K_dist_right = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]])
+        self.K_rect_right = np.array(cam_to_cam["cam1"]["projection_matrix"])[:, :3]
+        R_rect_right = np.array(cam_to_cam["cam1"]["rectification_matrix"])
+        dist_coeffs_right = np.array(cam_to_cam["cam1"]["distortion_coeffs"])
+        resolution_right = cam_to_cam["cam1"]["resolution"]
+        rect_map_x_right, rect_map_y_right = cv2.fisheye.initUndistortRectifyMap(
+            K_dist_right, dist_coeffs_right, R_rect_right, self.K_rect_right, resolution_right, cv2.CV_32F
+        )
+        self.bw_rect_map_right = np.stack([rect_map_x_right, rect_map_y_right], axis=-1)
+
+        # Kalibr camchain: cam1 T_cn_cnm1 maps cam0/left coordinates into cam1/right coordinates
+        self.T_left_to_right = np.array(cam_to_cam["cam1"]["T_cn_cnm1"], dtype=np.float32)
+
         # get duration of recording
         # don't get full t because of memory usage
         self.t0, self.tk = self.fs["data"]["davis/left/events"][[0, -1], 2]  # s
+        self.right_event_ts = self.fs["data"]["davis/right/events"][:, 2]
         if self.time is not None:
             t0, tk = self.time
             t0 = t0 + self.t0 if t0 is not None else self.t0
@@ -192,6 +214,7 @@ class MvsecSequence:
 
         # go over slices
         events, frames, counts, targets, poses = [], [], [], [], []
+        frames_right = []
         for i in chunk:
             # convert to indices
             start = bisect_left(self.fs["data"]["davis/left/events"], self.t_start[i], key=lambda x: x[2])
@@ -243,6 +266,35 @@ class MvsecSequence:
             # crop frame
             frame = frame[..., top:bottom, left:right]
 
+            # build matching right-camera event count frame from the same time window
+            start_right = bisect_left(self.right_event_ts, self.t_start[i])
+            end_right = bisect_left(self.right_event_ts, self.t_end[i])
+
+            t_r = self.fs["data"]["davis/right/events"][start_right:end_right, 2]
+            y_r = self.fs["data"]["davis/right/events"][start_right:end_right, 1]
+            x_r = self.fs["data"]["davis/right/events"][start_right:end_right, 0]
+            p_r = self.fs["data"]["davis/right/events"][start_right:end_right, 3]
+
+            y_r_t = torch.from_numpy(y_r.astype(np.int64))
+            x_r_t = torch.from_numpy(x_r.astype(np.int64))
+            p_r_t = torch.from_numpy(((p_r + 1) // 2).astype(np.int64))
+            frame_right = torch.zeros(2, *self.sensor_size, dtype=torch.int64)
+            frame_right.index_put_((p_r_t, y_r_t, x_r_t), torch.ones_like(p_r_t), accumulate=True)
+
+            if self.rectify:
+                frame_right = cv2.remap(
+                    frame_right.numpy().transpose(1, 2, 0),
+                    self.bw_rect_map_right,
+                    None,
+                    interpolation=cv2.INTER_NEAREST,
+                )
+                frame_right = torch.from_numpy(frame_right.transpose(2, 0, 1))
+
+            frame_right = frame_right[..., top:bottom, left:right]
+
+            if len(t_r) < 10 or t_r[-1] == t_r[0]:
+                frame_right = torch.zeros_like(frame_right)
+
             # discard if few events or same timestamp
             if len(lst) < 10 or lst["t"][-1] == lst["t"][0]:
                 lst = np.array([], dtype=lst.dtype)
@@ -276,6 +328,7 @@ class MvsecSequence:
             # append
             events.append(lst)
             frames.append(frame)
+            frames_right.append(frame_right)
             counts.append(len(lst))
             targets.append(dict(gt_depth=gt_depth, gt_depth_id=gt_depth_id))
             poses.append(self.get_gt_relative_pose(self.t_start[i], self.t_end[i]))
@@ -285,6 +338,7 @@ class MvsecSequence:
         events = [np.pad(ev, (0, max_len - len(ev))) for ev in events]
         events = np.stack(events)
         frames = torch.stack(frames)
+        frames_right = torch.stack(frames_right)
         counts = np.array(counts)
 
         # apply augmentations; more efficient on chunks
@@ -293,16 +347,20 @@ class MvsecSequence:
             events["t"] = 1 - events["t"]
             events = np.flip(events)
             frames = frames.flip(0)
+            frames_right = frames_right.flip(0)
             counts = np.flip(counts).copy()
         if "vertical" in self.augmentation:
             events["y"] = (bottom - top - 1) - events["y"]
             frames = frames.flip(-2)
+            frames_right = frames_right.flip(-2)
         if "horizontal" in self.augmentation:
             events["x"] = (right - left - 1) - events["x"]
             frames = frames.flip(-1)
+            frames_right = frames_right.flip(-1)
         if "polarity" in self.augmentation:
             events["p"] *= -1
             frames = frames.flip(-3)  # only flip polarity
+            frames_right = frames_right.flip(-3)
 
         # adapt camera matrices to crop and augmentations
         K_rect = self.K_rect.copy()
@@ -313,6 +371,14 @@ class MvsecSequence:
         if "horizontal" in self.augmentation:
             K_rect[0, 2] = (right - left - 1) - K_rect[0, 2]
         inv_K_rect = np.linalg.inv(K_rect)
+
+        K_rect_right = self.K_rect_right.copy()
+        K_rect_right[0, 2] -= left
+        K_rect_right[1, 2] -= top
+        if "vertical" in self.augmentation:
+            K_rect_right[1, 2] = (bottom - top - 1) - K_rect_right[1, 2]
+        if "horizontal" in self.augmentation:
+            K_rect_right[0, 2] = (right - left - 1) - K_rect_right[0, 2]
 
         # convert to torch
         events = rfn.structured_to_unstructured(events, dtype=np.float32)
@@ -327,11 +393,13 @@ class MvsecSequence:
         ]
         K_rect = torch.from_numpy(K_rect.astype(np.float32))
         inv_K_rect = torch.from_numpy(inv_K_rect.astype(np.float32))
+        K_rect_right = torch.from_numpy(K_rect_right.astype(np.float32))
+        T_left_to_right = torch.from_numpy(self.T_left_to_right.astype(np.float32))
 
         # return dict
         sample = dict(
             frames=frames.float(),  #Left event frames
-	    frames_right=frames_right.float(),      # right event frames
+            frames_right=frames_right.float(),  # right event frames
             pose=poses,
             auxs=auxs,
             targets=targets if self.gt else None,
@@ -339,8 +407,8 @@ class MvsecSequence:
             eofs=[i == len(self.t_start) - 1 for i in chunk],
             K_rect=K_rect,    ## left rectified intrinsics
             inv_K_rect=inv_K_rect,
-	    K_rect_right=K_rect_right,              # right rectified intrinsics
-    	    T_left_to_right=T_left_to_right,        # stereo extrinsic
+            K_rect_right=K_rect_right,  # right rectified intrinsics
+            T_left_to_right=T_left_to_right,  # stereo extrinsic
         )
 
         return sample

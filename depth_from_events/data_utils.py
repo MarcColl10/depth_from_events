@@ -93,7 +93,11 @@ def time_first_collate(batch):
     collated_batch = DotMap()
     for key in batch[0]:
         if key in ["frames", "pose"]:
-            collated_batch[key] = torch.stack([sample[key] for sample in batch], dim=1)
+            values = [sample[key] for sample in batch]
+            if all(torch.is_tensor(v) for v in values):
+                collated_batch[key] = torch.stack(values, dim=1)
+            else:
+                collated_batch[key] = values
         elif key in ["auxs"]:
             collated_batch[key] = DotMap()
             for k in batch[0][key]:
